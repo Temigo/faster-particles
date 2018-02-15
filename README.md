@@ -1,2 +1,3 @@
 # faster-particles
-TBD
+* Generate toy dataset
+* to come soon
