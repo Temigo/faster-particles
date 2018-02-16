@@ -28,7 +28,12 @@ class ToydataGenerator(object):
             nimages = 2,
             out_png = False,
         )
-        
+        self.gt_box_padding = 20
+        np.random.seed(123)
+
+    def num_classes(self):
+        return 3
+
     def forward(self):
         output_showers, shower_start_points = make_shower(self.args_def)
         output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks)
@@ -37,27 +42,34 @@ class ToydataGenerator(object):
 
         bbox_labels = []
 
+
         # find bbox for shower
         rmin, rmax = np.where(np.any(output_showers, axis=1))[0][[0, -1]]
         cmin, cmax = np.where(np.any(output_showers, axis=0))[0][[0, -1]]
-        bbox_labels.append([1, rmin-2, rmax+2, cmin-2, cmax+2, 0]) # 0 for shower_start
+        bbox_labels.append([rmin-self.gt_box_padding,
+                            cmin-self.gt_box_padding,
+                            rmax+self.gt_box_padding,
+                            cmax+self.gt_box_padding,
+                            2]) # 2 for shower_start
 
         # find bbox for tracks
         for i in range(len(track_edges)):
-            bbox_labels.append([1, 
-                                 track_edges[i][0]-2,
-                                 track_edges[i][1]-2,
-                                 track_edges[i][0]+2,
-                                 track_edges[i][1]+2,
+            bbox_labels.append([track_edges[i][0]-self.gt_box_padding,
+                                 track_edges[i][1]-self.gt_box_padding,
+                                 track_edges[i][0]+self.gt_box_padding,
+                                 track_edges[i][1]+self.gt_box_padding,
                                  1 # 1 for track_edge
                              ])
 
-        output = np.maximum(output_showers, output_tracks).reshape([1, self.N, self.N, 1])
+        output = np.maximum(output_showers, output_tracks) #.reshape([1, self.N, self.N, 1])
+
+        output = output[np.newaxis,:,:,np.newaxis]
+        output = np.repeat(output, 3, axis=3)
 
         blob = {}
         #img = np.concatenate([img,img,img],axis=3)
-        blob['data'] = output
-        blob['im_info'] = [1, self.N, self.N, 1]
+        blob['data'] = output.astype(np.float32)
+        blob['im_info'] = [1, self.N, self.N, 3]
         blob['gt_boxes'] = np.array(bbox_labels)
 
         return blob
@@ -67,4 +79,3 @@ if __name__ == '__main__':
     blobdict = t.forward()
     print blobdict['gt_boxes']
     print blobdict['data'].shape
-    

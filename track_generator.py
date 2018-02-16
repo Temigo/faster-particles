@@ -71,7 +71,7 @@ def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3):
         start = None
         end = (np.random.randint(low=0, high=N), np.random.randint(low=0, high=N))
         for i_kink in range(max_kinks):
-            length = np.random.uniform(high=N)
+            length = np.random.uniform(low=40, high=N)
             theta = np.random.uniform(high=2.0*np.pi)
             start = end
             end = (np.clip(start[0] + int(length * np.cos(theta)), 0, 127), np.clip(start[1] + int(length * np.sin(theta)), 0, 127))
