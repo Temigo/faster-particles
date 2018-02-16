@@ -19,14 +19,14 @@ args_def = dict(
     out_png = True,
 )
 
-def make_shower(args):
+def make_shower(args, nx = 128, ny = 128):
 
-    img = np.zeros(shape=(args.nx, args.ny), dtype=int)
+    img = np.zeros(shape=(nx, ny), dtype=int)
 
     # randomly generate starting point
     # note there is a lmax buffer on the boundaries of canvas
     # so that shower doesn't fall off the image
-    vx, vy = np.random.randint(args.lmax,args.nx-args.lmax), np.random.randint(args.lmax,args.ny-args.lmax)
+    vx, vy = np.random.randint(args.lmax,nx-args.lmax), np.random.randint(args.lmax,ny-args.lmax)
     theta0 = np.random.uniform(2.*np.pi) # central angle of shower
 
     # randomly generate nlines endpoints such that the lines fall
@@ -46,7 +46,7 @@ def make_shower(args):
     indices1[vx-args.keep:vx+args.keep, vy-args.keep:vy+args.keep] = 0
     img[np.logical_and(indices0, indices1)] = 0
 
-    return img
+    return img, (vx,vy)
 
 def make_showerset(args):
     for i in range(args.N):
