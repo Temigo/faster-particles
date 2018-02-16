@@ -42,14 +42,11 @@ class ToydataGenerator(object):
 
         bbox_labels = []
 
-
         # find bbox for shower
-        rmin, rmax = np.where(np.any(output_showers, axis=1))[0][[0, -1]]
-        cmin, cmax = np.where(np.any(output_showers, axis=0))[0][[0, -1]]
-        bbox_labels.append([rmin-self.gt_box_padding,
-                            cmin-self.gt_box_padding,
-                            rmax+self.gt_box_padding,
-                            cmax+self.gt_box_padding,
+        bbox_labels.append([shower_start_points[0]-self.gt_box_padding,
+                            shower_start_points[1]-self.gt_box_padding,
+                            shower_start_points[0]+self.gt_box_padding,
+                            shower_start_points[1]+self.gt_box_padding,
                             2]) # 2 for shower_start
 
         # find bbox for tracks
