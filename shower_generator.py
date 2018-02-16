@@ -7,32 +7,32 @@ import sys
 #%matplotlib inline
 
 args_def = dict(
-    nx = 128,        
-    ny = 128,      
+    nx = 256,        
+    ny = 256,      
     nlines = 10,     
     dtheta = np.radians(20),        
-    lmin = 20,
-    lmax = 63,
+    lmin = 30,
+    lmax = 100,
     keep = 7,
     keep_prob = 0.6,
-    N = 2,
-    out_png = True,
+    nimages = 2,
+    out_png = False,
 )
 
-def make_shower(args, nx = 128, ny = 128):
+def make_shower(args):
 
-    img = np.zeros(shape=(nx, ny), dtype=int)
+    img = np.zeros(shape=(args['nx'], args['ny']), dtype=int)
 
     # randomly generate starting point
     # note there is a lmax buffer on the boundaries of canvas
     # so that shower doesn't fall off the image
-    vx, vy = np.random.randint(args.lmax,nx-args.lmax), np.random.randint(args.lmax,ny-args.lmax)
+    vx, vy = np.random.randint(args['lmax'],args['nx']-args['lmax']), np.random.randint(args['lmax'],args['ny']-args['lmax'])
     theta0 = np.random.uniform(2.*np.pi) # central angle of shower
 
     # randomly generate nlines endpoints such that the lines fall
     # within around dtheta of theta0
-    thetas = np.random.normal(loc=theta0, scale=args.dtheta, size=(args.nlines,1))
-    lengths = np.random.uniform(low=args.lmin, high=args.lmax, size=(args.nlines,1))
+    thetas = np.random.normal(loc=theta0, scale=args['dtheta'], size=(args['nlines'],1))
+    lengths = np.random.uniform(low=args['lmin'], high=args['lmax'], size=(args['nlines'],1))
 
     # draw shower lines
     for pos in np.hstack(((vx+lengths*np.cos(thetas)+0.5).astype(int), (vy+lengths*np.sin(thetas)+0.5).astype(int))):
@@ -40,25 +40,26 @@ def make_shower(args, nx = 128, ny = 128):
         img[rr, cc] = 1
 
     # randomly set pixels to 0
-    indices0 = np.random.choice([0, 1], p=[args.keep_prob, 1-args.keep_prob], size=img.shape).astype(np.bool)
+    indices0 = np.random.choice([0, 1], p=[args['keep_prob'], 1-args['keep_prob']], size=img.shape).astype(np.bool)
     #indices0 = np.random.randint(0,2,size=img.shape).astype(np.bool)
     indices1 = np.ones(img.shape)
-    indices1[vx-args.keep:vx+args.keep, vy-args.keep:vy+args.keep] = 0
+    indices1[vx-args['keep']:vx+args['keep'], vy-args['keep']:vy+args['keep']] = 0
     img[np.logical_and(indices0, indices1)] = 0
 
     return img, (vx,vy)
 
 def make_showerset(args):
-    for i in range(args.N):
-        img = make_shower(args)
+    for i in range(args['nimages']):
+        img, _ = make_shower(args)
         np.savetxt('shower_%d.txt'%i,img)
-        if args.out_png:
+        if args['out_png']:
             plt.imshow(img)
             plt.savefig('shower_%d.png'%i)
             plt.close()
         if i != 0 and i%20==0: print(i, ' done')        
 
 if __name__ == '__main__':
+    '''
     from argparse import ArgumentParser
     parser = ArgumentParser()
     
@@ -86,11 +87,12 @@ if __name__ == '__main__':
     parser.add_argument('--keep_prob', type=float, default = args_def['keep_prob'],
                         help='probability of keeping a pixel, 0.6')
 
-    parser.add_argument('--N', type=int, default = args_def['N'],
+    parser.add_argument('--nimages', type=int, default = args_def['nimages'],
                         help='number of images to generate, 100')
 
     parser.add_argument('--out_png', type=bool, default=args_def['out_png'],
                         help='whether to output png file, False')
     
     args = parser.parse_args()
-    make_showerset(args)
+    '''
+    make_showerset(args = args_def)

@@ -10,7 +10,7 @@ from track_generator import generate_toy_tracks
 from shower_generator import make_shower
 
 class ToydataGenerator(object):
-    CLASSES = ('__background__', 'track_start', 'track_end', 'shower_start')
+    CLASSES = ('__background__', 'track_edge', 'shower_start')
 
     def __init__(self, N, max_tracks, max_kinks):
         self.N = N # shape of canvas
