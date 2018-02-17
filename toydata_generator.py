@@ -28,7 +28,7 @@ class ToydataGenerator(object):
             nimages = 2,
             out_png = False,
         )
-        self.gt_box_padding = 20
+        self.gt_box_padding = 5
         np.random.seed(123)
 
     def num_classes(self):
