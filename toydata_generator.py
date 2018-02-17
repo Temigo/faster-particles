@@ -55,8 +55,10 @@ class ToydataGenerator(object):
             track_edges = track_start_points + track_end_points
 
         bbox_labels = []
+        simple_labels = []
 
         # find bbox for shower
+        # FIXME what happens if output_showers is empty ?
         rmin, rmax = np.where(np.any(output_showers, axis=1))[0][[0, -1]]
         cmin, cmax = np.where(np.any(output_showers, axis=0))[0][[0, -1]]
         bbox_labels.append([rmin-self.gt_box_padding,
@@ -64,7 +66,8 @@ class ToydataGenerator(object):
                             rmax+self.gt_box_padding,
                             cmax+self.gt_box_padding,
                             2]) # 2 for shower_start
-
+        if len(output_showers):
+            simple_labels.append([2])
         # find bbox for tracks
         for i in range(len(track_edges)):
             bbox_labels.append([track_edges[i][0]-self.gt_box_padding,
@@ -73,6 +76,7 @@ class ToydataGenerator(object):
                                  track_edges[i][1]+self.gt_box_padding,
                                  1 # 1 for track_edge
                              ])
+            simple_labels.append([1])
 
         output = np.maximum(output_showers, output_tracks) #.reshape([1, self.N, self.N, 1])
 
@@ -84,6 +88,7 @@ class ToydataGenerator(object):
         blob['data'] = output.astype(np.float32)
         blob['im_info'] = [1, self.N, self.N, 3]
         blob['gt_boxes'] = np.array(bbox_labels)
+        blob['gt_labels'] = np.array(simple_labels)
 
         return blob
 
