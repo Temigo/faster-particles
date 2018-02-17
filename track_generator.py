@@ -56,7 +56,8 @@ def draw_line(output, p1, p2):
                 e -= 2*dy
             e += 2*dx
 
-def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3):
+def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3, padding=10):
+    N = N - 2*padding
     nb_tracks = np.random.randint(low=1, high=max_tracks+1)
     output = np.zeros(shape=(N, N), dtype=int)
 
@@ -79,6 +80,8 @@ def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3):
             start_points.append(start)
             end_points.append(end)
             draw_line(output, start, end)
+
+    output = np.pad(output, (padding,), 'constant', constant_values=(0,))
 
     if len(filename):
         if out_format == 'csv':
