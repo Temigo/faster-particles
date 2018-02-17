@@ -12,7 +12,7 @@ from shower_generator import make_shower
 class ToydataGenerator(object):
     CLASSES = ('__background__', 'track_edge', 'shower_start')
 
-    def __init__(self, N, max_tracks, max_kinks):
+    def __init__(self, N, max_tracks, max_kinks, classification=False):
         self.N = N # shape of canvas
         self.max_tracks = max_tracks
         self.max_kinks = max_kinks
@@ -29,19 +29,32 @@ class ToydataGenerator(object):
             out_png = False,
         )
         self.gt_box_padding = 5
+        self.classification = classification
+        if classification:
+            self.max_tracks = 1
         np.random.seed(123)
 
     def num_classes(self):
         return 3
 
     def forward(self):
-        output_showers, shower_start_points = make_shower(self.args_def)
-        output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, padding=self.gt_box_padding)
-        # start and end are ill-defined without charge gradient
-        track_edges = track_start_points + track_end_points
+        if self.classification:
+            if np.random.random() < 0.5:
+                output_showers, shower_start_points = np.zeros((self.N, self.N)), []
+                output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, padding=self.gt_box_padding)
+                # start and end are ill-defined without charge gradient
+                track_edges = track_start_points + track_end_points
+            else:
+                output_showers, shower_start_points = make_shower(self.args_def)
+                output_tracks = np.zeros((self.N, self.N))
+                track_edges = []
+        else:
+            output_showers, shower_start_points = make_shower(self.args_def)
+            output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, padding=self.gt_box_padding)
+            # start and end are ill-defined without charge gradient
+            track_edges = track_start_points + track_end_points
 
         bbox_labels = []
-
 
         # find bbox for shower
         rmin, rmax = np.where(np.any(output_showers, axis=1))[0][[0, -1]]
@@ -75,7 +88,7 @@ class ToydataGenerator(object):
         return blob
 
 if __name__ == '__main__':
-    t = ToydataGenerator(256, 3, 1)
+    t = ToydataGenerator(256, 3, 1, classification=True)
     blobdict = t.forward()
     print blobdict['gt_boxes']
     print blobdict['data'].shape
