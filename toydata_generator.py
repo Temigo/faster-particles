@@ -59,24 +59,24 @@ class ToydataGenerator(object):
 
         # find bbox for shower
         # FIXME what happens if output_showers is empty ?
-        rmin, rmax = np.where(np.any(output_showers, axis=1))[0][[0, -1]]
-        cmin, cmax = np.where(np.any(output_showers, axis=0))[0][[0, -1]]
-        bbox_labels.append([rmin-self.gt_box_padding,
-                            cmin-self.gt_box_padding,
-                            rmax+self.gt_box_padding,
-                            cmax+self.gt_box_padding,
-                            2]) # 2 for shower_start
-        if len(output_showers):
+        if shower_start_points:
+            bbox_labels.append([shower_start_points[0]-self.gt_box_padding,
+                                shower_start_points[1]-self.gt_box_padding,
+                                shower_start_points[0]+self.gt_box_padding,
+                                shower_start_points[1]+self.gt_box_padding,
+                                2]) # 2 for shower_start
             simple_labels.append([2])
+
         # find bbox for tracks
-        for i in range(len(track_edges)):
-            bbox_labels.append([track_edges[i][0]-self.gt_box_padding,
-                                 track_edges[i][1]-self.gt_box_padding,
-                                 track_edges[i][0]+self.gt_box_padding,
-                                 track_edges[i][1]+self.gt_box_padding,
-                                 1 # 1 for track_edge
+        if track_edges: 
+            for i in range(len(track_edges)):
+                bbox_labels.append([track_edges[i][0]-self.gt_box_padding,
+                                    track_edges[i][1]-self.gt_box_padding,
+                                    track_edges[i][0]+self.gt_box_padding,
+                                    track_edges[i][1]+self.gt_box_padding,
+                                    1 # 1 for track_edge
                              ])
-            simple_labels.append([1])
+                simple_labels.append([1])
 
         output = np.maximum(output_showers, output_tracks) #.reshape([1, self.N, self.N, 1])
 
