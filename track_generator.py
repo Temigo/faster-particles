@@ -5,6 +5,10 @@
 # from track_generator import generate_toy_tracks
 # output = generate_toy_tracks(N, max_tracks [, filename, output, max_kinks])
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,12 +81,12 @@ def generate_toy_tracks(N, max_tracks, max_track_length=None, filename='', out_f
         nb_kinks = np.random.randint(low=0, high=max_kinks)
         if kinks is not None:
             nb_kinks = kinks
-        for i_kink in range(nb_kinks):
+        for i_kink in range(nb_kinks+1):
             length = np.random.uniform(low=40, high=max_track_length)
             theta = np.random.uniform(high=2.0*np.pi)
             start = end
             end = (np.clip(start[0] + int(length * np.cos(theta)), 0, 127), np.clip(start[1] + int(length * np.sin(theta)), 0, 127))
-            print i_track, i_kink, start, end
+            print(i_track, i_kink, start, end)
             start_points.append(start)
             end_points.append(end)
             draw_line(output, start, end)
@@ -95,13 +99,13 @@ def generate_toy_tracks(N, max_tracks, max_track_length=None, filename='', out_f
                 np.savetxt(f, output, delimiter=",")
         elif out_format == 'png':
             plt.imsave(filename + '.png', output)#, cmap=cm.gray)
-            print "\n%s saved.\n" % filename
+            print("\n%s saved.\n" % filename)
     return output, start_points, end_points
 
 if __name__ == '__main__':
     #generate_toy_tracks(128, 5)
     if len(sys.argv) < 5:
-        print "Usage : python track_generator.py N max_tracks max_kinks outCsv nb-images"
+        print("Usage : python track_generator.py N max_tracks max_kinks outCsv nb-images")
     else:
         if int(sys.argv[4]):
             for _ in range(int(sys.argv[5])):

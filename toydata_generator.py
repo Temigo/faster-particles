@@ -2,9 +2,11 @@
 # Generate toy dataset
 # with labels = feature space points (track and shower start/end points)
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
 import sys
 from track_generator import generate_toy_tracks
 from shower_generator import make_shower
@@ -43,28 +45,35 @@ class ToydataGenerator(object):
         track_length = 0.0
         kinks = 0
         if self.classification:
-						if self.kinks is None:
-								if np.random.random() < 0.5:
-										output_showers, shower_start_points = np.zeros((self.N, self.N)), []
-										output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, max_track_length=self.max_track_length, padding=self.gt_box_padding)
-										# start and end are ill-defined without charge gradient
-										track_edges = track_start_points + track_end_points
-										image_label = 1 # Track image
-										kinks = len(track_start_points)
-										track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
-								else:
-										output_showers, shower_start_points = make_shower(self.args_def)
-										output_tracks = np.zeros((self.N, self.N))
-										track_edges = []
-										image_label = 2 # shower image
-						else:
-										output_showers, shower_start_points = np.zeros((self.N, self.N)), []
-										output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, max_track_length=self.max_track_length, padding=self.gt_box_padding, kinks=self.kinks)
-										# start and end are ill-defined without charge gradient
-										track_edges = track_start_points + track_end_points
-										image_label = 1 # Track image
-										kinks = len(track_start_points)
-										track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
+            if self.kinks is None:
+                if np.random.random() < 0.5:
+                    output_showers, shower_start_points = np.zeros((self.N, self.N)), []
+                    output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, 
+                                                                                            max_kinks=self.max_kinks, 
+                                                                                            max_track_length=self.max_track_length, 
+                                                                                            padding=self.gt_box_padding)
+                    # start and end are ill-defined without charge gradient
+                    track_edges = track_start_points + track_end_points
+                    image_label = 1 # Track image
+                    kinks = len(track_start_points)
+                    track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
+                else:
+                    output_showers, shower_start_points = make_shower(self.args_def)
+                    output_tracks = np.zeros((self.N, self.N))
+                    track_edges = []
+                    image_label = 2 # shower image
+            else:
+                output_showers, shower_start_points = np.zeros((self.N, self.N)), []
+                output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, 
+                                                                                        max_kinks=self.max_kinks, 
+                                                                                        max_track_length=self.max_track_length, 
+                                                                                        padding=self.gt_box_padding, 
+                                                                                        kinks=self.kinks)
+                # start and end are ill-defined without charge gradient
+                track_edges = track_start_points + track_end_points
+                image_label = 1 # Track image
+                kinks = len(track_start_points)
+                track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
 
         else:
             output_showers, shower_start_points = make_shower(self.args_def)
@@ -116,6 +125,6 @@ class ToydataGenerator(object):
 if __name__ == '__main__':
     t = ToydataGenerator(256, 1, 1, classification=True)
     blobdict = t.forward()
-    print blobdict['gt_boxes']
-    print blobdict['data'].shape
-    print blobdict['gt_labels']
+    #print blobdict['gt_boxes']
+    #print blobdict['data'].shape
+    #print blobdict['gt_labels']
