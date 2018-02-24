@@ -56,13 +56,16 @@ def draw_line(output, p1, p2):
                 e -= 2*dy
             e += 2*dx
 
-def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3, padding=10):
+def generate_toy_tracks(N, max_tracks, max_track_length=None, filename='', out_format='', max_kinks=3, padding=10, kinks=None):
     N = N - 2*padding
     nb_tracks = np.random.randint(low=1, high=max_tracks+1)
     output = np.zeros(shape=(N, N), dtype=int)
 
-    print "\nGenerating %d x %d image with %d tracks (at most %d tracks)" % (N, N, nb_tracks, max_tracks)
-    print "Save to %s\n" % out_format
+    if max_track_length is None:
+        max_track_length = N
+
+    #print "\nGenerating %d x %d image with %d tracks (at most %d tracks)" % (N, N, nb_tracks, max_tracks)
+    #print "Save to %s\n" % out_format
 
     start_points = []
     end_points = []
@@ -71,8 +74,11 @@ def generate_toy_tracks(N, max_tracks, filename='', out_format='', max_kinks=3, 
         #length = np.random.uniform(high=np.sqrt(2.0) * N)
         start = None
         end = (np.random.randint(low=0, high=N), np.random.randint(low=0, high=N))
-        for i_kink in range(max_kinks):
-            length = np.random.uniform(low=40, high=N)
+        nb_kinks = np.random.randint(low=0, high=max_kinks)
+        if kinks is not None:
+            nb_kinks = kinks
+        for i_kink in range(nb_kinks):
+            length = np.random.uniform(low=40, high=max_track_length)
             theta = np.random.uniform(high=2.0*np.pi)
             start = end
             end = (np.clip(start[0] + int(length * np.cos(theta)), 0, 127), np.clip(start[1] + int(length * np.sin(theta)), 0, 127))
