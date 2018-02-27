@@ -1,5 +1,5 @@
 # *-* encoding: utf-8 *-*
-# Usage: python train_ppn.py i max_steps
+# Usage: python train_ppn.py i max_steps vgg.ckpt
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -25,6 +25,8 @@ net.create_architecture()
 saver = tf.train.Saver()
 
 with tf.Session() as sess:
+    # saver.restore(sess, sys.argv[3])
+    # FIXME Fix variables? Cf faster-rcnn trainer.py source code
     summary_writer_train = tf.summary.FileWriter(logdir + '/train', sess.graph)
     summary_writer_test = tf.summary.FileWriter(logdir + '/test', sess.graph)
     sess.run(tf.global_variables_initializer())
@@ -41,7 +43,7 @@ with tf.Session() as sess:
         if is_testing:
             net.test_image(blob)
         else:
-            summary = net.train_step_with_summary(sess, blob, None)
+            summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = net.train_step_with_summary(sess, blob, None)
 
         if is_testing:
             summary_writer_test.add_summary(summary, step)
