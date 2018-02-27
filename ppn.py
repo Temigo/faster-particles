@@ -18,235 +18,237 @@ class PPN(object):
         self.is_training = True
         self.num_classes = num_classes # background, track edge, shower start
         self.N = N
+        self.ppn1_score_threshold = 0.5
+        self.ppn2_distance_threshold = 2
 
     def create_architecture(self):
         # Define placeholders
         # FIXME Assuming batch size of 1 currently
         self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
-        # Shape of gt_pixels_placeholder = nb_gt_pixels, coordinates, class label
-        self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 2, 1), dtype=tf.float32)
-        # FIXME this can be replaced with self.image_placeholder.shape?
-        self.input_shape_placeholder = tf.placeholder(name="input_shape", shape=(4,), dtype=tf.int32)
+        # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
+        self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
 
-        # Define network
-        # =====================================================
-        # --- VGG16 net = 13 conv layers with 5 max-pooling ---
-        # =====================================================
-        with tf.variable_scope("vgg_16"):
-            net = slim.repeat(self.image_placeholder, 2, slim.conv2d, 64, [3, 3],
-                              trainable=False, scope='conv1')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
-                            trainable=False, scope='conv2')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
-            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
-                            trainable=self.is_training, scope='conv3')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
-            net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
-                            trainable=self.is_training, scope='conv4')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
-            net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
-                            trainable=self.is_training, scope='conv5')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
-            # After 5 times (2, 2) pooling, if input image is 512x512
-            # the feature map should be spatial dimensions 16x16.
+        # Define network regularizers
+        weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+        biases_regularizer = tf.no_regularizer
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                            weights_regularizer=weights_regularizer,
+                            biases_regularizer=biases_regularizer,
+                            biases_initializer=tf.constant_initializer(0.0)):
+            # =====================================================
+            # --- VGG16 net = 13 conv layers with 5 max-pooling ---
+            # =====================================================
+            with tf.variable_scope("vgg_16"):
+                net = slim.repeat(self.image_placeholder, 2, slim.conv2d, 64, [3, 3],
+                                  trainable=False, scope='conv1')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
+                net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
+                                trainable=False, scope='conv2')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
+                net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
+                                trainable=self.is_training, scope='conv3')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
+                net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
+                                trainable=self.is_training, scope='conv4')
+                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
+                net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
+                                trainable=self.is_training, scope='conv5')
+                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
+                # After 5 times (2, 2) pooling, if input image is 512x512
+                # the feature map should be spatial dimensions 16x16.
 
-        # =====================================================
-        # ---       Pixel Proposal Network 1                ---
-        # =====================================================
-        with tf.variable_scope("ppn1"):
-            # Define initializers
-            rcnn_initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
-            initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-            initializer_bbox = tf.random_normal_initializer(mean=0.0, stddev=0.001)
+            # =====================================================
+            # ---       Pixel Proposal Network 1                ---
+            # =====================================================
+            with tf.variable_scope("ppn1"):
+                # Define initializers
+                initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
 
-            # Step 0) Convolution for RPN/Detection shared layer
-            # Shape of rpn = 1, 16, 16, 512
-            rpn = slim.conv2d(net2,
-                              512, # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels : (3, 3)
-                              trainable=True,
-                              weights_initializer=rcnn_initializer,
-                              scope="rpn_conv/3x3")
-            # print("rpn shape:", rpn.shape)
-            # Step 1-a) PPN 2 pixel position predictions
-            # Shape of rpn_bbox_pred = 1, 16, 16, 2
-            rpn_bbox_pred = slim.conv2d(rpn, 2, [1, 1],
-                                        trainable=True,
-                                        weights_initializer=rcnn_initializer,
-                                        padding='VALID',
-                                        activation_fn=None,
-                                        scope='rpn_bbox_pred')
-            # print("rpn_bbox_pred shape:", rpn_bbox_pred.shape)
-            # Step 1-b) Generate 2 class scores (background vs signal)
-            # Shape of rpn_cls_score = 1, 16, 16, 2
-            # FIXME use sigmoid instead of softmax?
-            rpn_cls_score = slim.conv2d(rpn, 2, [1, 1],
-                                        trainable=True,
-                                        weights_initializer=rcnn_initializer,
-                                        padding='VALID',
-                                        activation_fn=None,
-                                        scope='rpn_cls_score')
-            # print("rpn_cls_score shape:", rpn_cls_score.shape)
+                # Step 0) Convolution for RPN/Detection shared layer
+                # Shape of rpn = 1, 16, 16, 512
+                ppn1 = slim.conv2d(net2,
+                                  512, # RPN Channels = num_outputs
+                                  (3, 3), # RPN Kernels : (3, 3)
+                                  trainable=True,
+                                  weights_initializer=initializer,
+                                  scope="ppn1_conv/3x3")
+                # Step 1-a) PPN 2 pixel position predictions
+                # Shape of rpn_bbox_pred = 1, 16, 16, 2
+                ppn1_pixel_pred = slim.conv2d(ppn1, 2, [1, 1],
+                                            trainable=True,
+                                            weights_initializer=initializer,
+                                            padding='VALID',
+                                            activation_fn=None,
+                                            scope='ppn1_pixel_pred')
+                # Step 1-b) Generate 2 class scores (background vs signal)
+                # Shape of rpn_cls_score = 1, 16, 16, 2
+                # FIXME use sigmoid instead of softmax?
+                ppn1_cls_score = slim.conv2d(ppn1, 2, [1, 1],
+                                            trainable=True,
+                                            weights_initializer=initializer,
+                                            padding='VALID',
+                                            activation_fn=None,
+                                            scope='ppn1_cls_score')
 
-            # Compute softmax
-            # Shape of rpn_cls_prob = 1, 16, 16, 2
-            rpn_cls_prob = tf.nn.softmax(rpn_cls_score)
-            # print("rpn_cls_prob shape:", rpn_cls_prob.shape)
+                # Compute softmax
+                # Shape of rpn_cls_prob = 1, 16, 16, 2
+                ppn1_cls_prob = tf.nn.softmax(ppn1_cls_score)
+                # print("rpn_cls_prob shape:", rpn_cls_prob.shape)
 
-            # Step 3) Get a (meaningful) subset of rois and associated scores
-            # Generate anchors = pixel centers of the last feature map.
-            # Shape of anchors = 16*16, 2
-            anchors = self.generate_anchors(width=16, height=16) # FIXME express width and height better
-            assert anchors.get_shape().as_list() == [256, 2]
+                # Step 3) Get a (meaningful) subset of rois and associated scores
+                # Generate anchors = pixel centers of the last feature map.
+                # Shape of anchors = 16*16, 2
+                anchors = self.generate_anchors(width=16, height=16) # FIXME express width and height better
+                assert anchors.get_shape().as_list() == [256, 2]
 
-            # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
-            # and anchors. Take the first R proposed pixels which contain an object.
-            proposals, scores = self.predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors)
-            rois, roi_scores = self.top_R_pixels(proposals, scores, R=20)
-            assert proposals.get_shape().as_list() == [256, 2]
-            assert scores.get_shape().as_list() == [256, 1]
+                # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
+                # and anchors. Take the first R proposed pixels which contain an object.
+                proposals, scores = self.predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors)
+                rois, roi_scores = self.top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
+                assert proposals.get_shape().as_list() == [256, 2]
+                assert scores.get_shape().as_list() == [256, 1]
+                assert rois.get_shape().as_list() == [None, 2]
+                assert roi_scores.get_shape().as_list() == [None, 1]
+
+                # all outputs from 1x1 convolution are categorized into “positives” and “negatives”.
+                # Positives = pixels which contain a ground-truth point
+                # Negatives = other pixels
+                classes_mask = self.compute_positives_ppn1()
+                assert classes_mask.get_shape().as_list() == [256, 1]
+                # FIXME Use Kazu's pixel index to limit the number of gt points for
+                # which we compute a distance from a unique proposed point per pixel.
+
+                # For each pixel of the F5 features map get distance between proposed point
+                # and the closest ground truth pixel
+                # Don't forget to convert gt pixels coordinates to F5 coordinates
+                closest_gt, closest_gt_distance, _ = self.assign_gt_pixels(proposals)
+                assert closest_gt.get_shape().as_list() == [256]
+                assert closest_gt_distance.get_shape().as_list() == [256, 1]
+                #assert closest_gt_label.get_shape().as_list() == [256, 1]
+
+                # Step 4) compute loss for PPN1
+                # First is point loss: for positive pixels, distance from proposed pixel to closest ground truth pixel
+                # FIXME reduce_mean or reduce_sum? Same for loss_ppn1_class
+                loss_ppn1_point = tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask))
+                # Use softmax_cross_entropy instead of sigmoid here
+                #loss_ppn1_class = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(classes_mask, tf.float32), logits=scores))
+                loss_ppn1_class = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32),
+                                                                                                logits=tf.reshape(ppn1_cls_score, (-1, 2))))
+            # --- END of Pixel Proposal Network 1 ---
+
+            # Check if all ground truth pixels are covered by ROIs
+            # If not, add relevant ROIs on F3
+            # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
+            # but instead allow random variation
+            rois = self.include_gt_pixels(rois)
             assert rois.get_shape().as_list() == [None, 2]
-            assert roi_scores.get_shape().as_list() == [None, 1]
 
-            # all outputs from 1x1 convolution are categorized into “positives” and “negatives”.
-            # Positives = pixels which contain a ground-truth point
-            # Negatives = other pixels
-            classes_mask = self.compute_positives_ppn1()
-            assert classes_mask.get_shape().as_list() == [256, 1]
-            # FIXME Use Kazu's pixel index to limit the number of gt points for
-            # which we compute a distance from a unique proposed point per pixel.
+            # Pool to Pixels of Interest of intermediate layer
+            # FIXME How do we want to do the ROI pooling?
+            # Shape of rpn_pooling = nb_rois, 4, 4, 256
+            rpn_pooling = self.crop_pool_layer_2d(net, rois)
+            assert rpn_pooling.get_shape().as_list() == [None, 4, 4, 256]
 
-            # For each pixel of the F5 features map get distance between proposed point
-            # and the closest ground truth pixel
-            closest_gt, closest_gt_distance, _ = self.assign_gt_pixels(proposals)
-            assert closest_gt.get_shape().as_list() == [256]
-            assert closest_gt_distance.get_shape().as_list() == [256, 1]
-            #assert closest_gt_label.get_shape().as_list() == [256, 1]
+            # =====================================================
+            # ---         Pixel Proposal Network 2              ---
+            # =====================================================
+            with tf.variable_scope("ppn2"):
+                # Define initializers
+                initializer2=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
 
-            # Step 4) compute loss for PPN1
-            # First is point loss: for positive pixels, distance from proposed pixel to closest ground truth pixel
-            # FIXME reduce_mean or reduce_sum? Same for loss_ppn1_class
-            loss_ppn1_point = tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask))
-            # Use softmax_cross_entropy instead of sigmoid here
-            #loss_ppn1_class = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(classes_mask, tf.float32), logits=scores))
-            loss_ppn1_class = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32),
-                                                                                            logits=tf.reshape(rpn_cls_score, (-1, 2))))
-        # --- END of Pixel Proposal Network 1 ---
+                batch_size = tf.shape(rpn_pooling)[0]
+                # Step 0) Convolution for PPN2 intermediate layer
+                # Based on F3 feature map (ie after 3 max-pool layers in VGG)
+                # Shape = nb_rois, 4, 4, 512
+                ppn2 = slim.conv2d(rpn_pooling,
+                                  512, # RPN Channels = num_outputs
+                                  (3, 3), # RPN Kernels : (3, 3)
+                                  trainable=True,
+                                  weights_initializer=initializer2,
+                                  scope="ppn2_conv/3x3")
+                # Step 1-a) PPN 2 pixel prediction parameters
+                # Proposes pixel position (x, y) w.r.t. pixel center = anchor
+                # Shape of rpn_bbox_pred2 = nb_rois, 4, 4, 2
+                ppn2_pixel_pred = slim.conv2d(ppn2, 2, [1, 1],
+                                            trainable=True,
+                                            weights_initializer=initializer2,
+                                            padding='VALID',
+                                            activation_fn=None,
+                                            scope='ppn2_pixel_pred2')
+                # print("rpn_bbox_pred2 shape=", rpn_bbox_pred2.shape)
+                # Step 1-b) Generate class scores
+                # Shape of rpn_cls_score2 = nb_rois, 4, 4, num_classes
+                ppn2_cls_score = slim.conv2d(ppn2, self.num_classes, [1, 1],
+                                            trainable=True,
+                                            weights_initializer=initializer2,
+                                            padding='VALID',
+                                            activation_fn=None,
+                                            scope='ppn2_cls_score')
+                # print("rpn_cls_score2 shape=", rpn_cls_score2.shape)
+                # Compute softmax
+                ppn2_cls_prob = tf.nn.softmax(ppn2_cls_score) # FIXME might need a reshape here
+                # print("rpn_cls_prob2 shape=", rpn_cls_prob2.shape)
 
-        # Check if all ground truth pixels are covered by ROIs
-        # If not, add relevant ROIs on F3
-        # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
-        # but instead allow random variation
-        rois = self.include_gt_pixels(rois)
-        assert rois.get_shape().as_list() == [None, 2]
+                # Step 3) Get a (meaningful) subset of rois and associated scores
+                # Anchors are defined as center of pixels
+                # Shape [nb_rois * 4 * 4 , 2]
+                anchors2 = self.generate_anchors(width=4, height=4, repeat=batch_size) # FIXME express width and height better
+                assert anchors2.get_shape().as_list() == [None, 2]
+                # Derive proposed points from delta predictions (rpn_bbox_pred2) w.r.t. pixels centers
+                # Coordinates of proposals2 are in 4x4 ROI area
+                # We have 4*4*num_roi proposals and corresponding scores
+                proposals2, scores2 = self.predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, classes=True)
+                assert proposals2.get_shape().as_list() == [None, 2]
+                assert scores2.get_shape().as_list() == [None, self.num_classes]
+                # Find closest ground truth pixel and its label
+                # Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
+                closest_gt, closest_gt_distance, true_labels = self.assign_gt_pixels(proposals2, rois=rois)
+                assert closest_gt.get_shape().as_list() == [None]
+                assert closest_gt_distance.get_shape().as_list() == [None, 1]
+                assert true_labels.get_shape().as_list() == [None, 1]
 
-        # Pool to Pixels of Interest of intermediate layer
-        # FIXME How do we want to do the ROI pooling?
-        # Shape of rpn_pooling = nb_rois, 4, 4, 256
-        rpn_pooling = self.crop_pool_layer_2d(net, rois)
-        assert rpn_pooling.get_shape().as_list() == [None, 4, 4, 256]
+                # Positives now = pixels within certain distance range from
+                # the closest ground-truth point of the same class (track edge or shower start)
+                positives = self.compute_positives_ppn2(scores2, closest_gt_distance, true_labels, threshold=self.ppn2_distance_threshold)
+                assert positives.get_shape().as_list() == [None, 1]
 
-        # =====================================================
-        # ---         Pixel Proposal Network 2              ---
-        # =====================================================
-        with tf.variable_scope("ppn2"):
-            # Define initializers
-            rcnn_initializer2=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
-            initializer2 = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-            initializer_bbox2 = tf.random_normal_initializer(mean=0.0, stddev=0.001)
+                # Step 4) Loss
+                # first is based on an absolute distance to the closest
+                # ground-truth point where only positives count
+                loss_ppn2_point = tf.reduce_sum(tf.boolean_mask(closest_gt_distance, positives))
+                # second is a softmax class loss from both positives and negatives
+                # for positives, the true label is defined by the closest point’s label
+                loss_ppn2_class = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels, (-1,)), tf.int32),
+                                                                                 logits=tf.reshape(ppn2_cls_score, (-1, self.num_classes)))
 
-            batch_size = tf.shape(rpn_pooling)[0]
-            # Step 0) Convolution for PPN2 intermediate layer
-            # Based on F3 feature map (ie after 3 max-pool layers in VGG)
-            # Shape = nb_rois, 4, 4, 512
-            rpn2 = slim.conv2d(rpn_pooling,
-                              512, # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels : (3, 3)
-                              trainable=True,
-                              weights_initializer=rcnn_initializer2,
-                              scope="rpn_conv2/3x3")
-            # Step 1-a) PPN 2 pixel prediction parameters
-            # Proposes pixel position (x, y) w.r.t. pixel center = anchor
-            # Shape of rpn_bbox_pred2 = nb_rois, 4, 4, 2
-            rpn_bbox_pred2 = slim.conv2d(rpn2, 2, [1, 1],
-                                        trainable=True,
-                                        weights_initializer=rcnn_initializer2,
-                                        padding='VALID',
-                                        activation_fn=None,
-                                        scope='rpn_bbox_pred2')
-            # print("rpn_bbox_pred2 shape=", rpn_bbox_pred2.shape)
-            # Step 1-b) Generate class scores
-            # Shape of rpn_cls_score2 = nb_rois, 4, 4, num_classes
-            rpn_cls_score2 = slim.conv2d(rpn2, self.num_classes, [1, 1],
-                                        trainable=True,
-                                        weights_initializer=rcnn_initializer2,
-                                        padding='VALID',
-                                        activation_fn=None,
-                                        scope='rpn_cls_score2')
-            # print("rpn_cls_score2 shape=", rpn_cls_score2.shape)
-            # Compute softmax
-            rpn_cls_prob2 = tf.nn.softmax(rpn_cls_score2) # FIXME might need a reshape here
-            # print("rpn_cls_prob2 shape=", rpn_cls_prob2.shape)
+                # --- END of Pixel Proposal Network 2 ---
 
-            # Step 3) Get a (meaningful) subset of rois and associated scores
-            # Anchors are defined as center of pixels
-            # Shape [nb_rois * 4 * 4 , 2]
-            anchors2 = self.generate_anchors(width=4, height=4, repeat=batch_size) # FIXME express width and height better
-            assert anchors2.get_shape().as_list() == [None, 2]
-            # Derive proposed points from delta predictions (rpn_bbox_pred2) w.r.t. pixels centers
-            # Coordinates of proposals2 are in 4x4 ROI area
-            proposals2, scores2 = self.predicted_pixels(rpn_cls_prob2, rpn_bbox_pred2, anchors2, classes=True)
-            assert proposals2.get_shape().as_list() == [None, 2]
-            assert scores2.get_shape().as_list() == [None, self.num_classes]
-            # Find closest ground truth pixel and its label
-            # FIXME We need to convert gt_pixels_placeholder information to ROI 4x4 coordinates
-            closest_gt, closest_gt_distance, true_labels = self.assign_gt_pixels(proposals2)
-            assert closest_gt.get_shape().as_list() == [None]
-            assert closest_gt_distance.get_shape().as_list() == [None, 1]
-            assert true_labels.get_shape().as_list() == [None, 1]
+                # Turn predicted positions (float) into original image positions
+                # Convert proposals2 ROI 4x4 coordinates to 64x64 F3 coordinates
+                # then back to original image.
+                # f3_proposals = tf.reshape(tf.boolean_mask(proposals2, positives), (-1, 16, 2))
+                # im_proposals = (f3_proposals + 4*rois)*8.0
+                # im_labels = tf.argmax(tf.boolean_mask(scores2, positives), axis=1)
+                # We have now 4*4*num_roi proposals and corresponding labels in original image.
+                # Pixel NMS equivalent ?
 
-            # Positives now = pixels within certain distance range from
-            # the closest ground-truth point of the same class (track edge or shower start)
-            positives = self.compute_positives_ppn2(scores2, closest_gt_distance, true_labels, threshold=2)
-            assert positives.get_shape().as_list() == [None, 1]
-
-            # Step 4) Loss
-            # first is based on an absolute distance to the closest
-            # ground-truth point where only positives count
-            loss_ppn2_point = tf.reduce_sum(tf.boolean_mask(closest_gt_distance, positives))
-            # second is a softmax class loss from both positives and negatives
-            # for positives, the true label is defined by the closest point’s label
-            loss_ppn2_class = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels, (-1,)), tf.int32),
-                                                                             logits=tf.reshape(rpn_cls_score2, (-1, self.num_classes)))
-
-            # --- END of Pixel Proposal Network 2 ---
-
-            # Pool to Pixels of Interest
-            #rpn_pooling2 = crop_pool_layer_2d(net, rois2, "rpn_pooling") # FIXME net?
-
-            # --- Pixel classification on 64x64 layer ---
-            #net_flat = slim.flatten(rpn_pooling2, scope='flatten')
-            #fc6 = slim.fully_connected(net_flat, 4096, scope='fc6')
-            #if is_training:
-            #    fc6 = slim.dropout(fc6, keep_prob=0.5, is_training=True,
-            #                        scope='dropout6')
-            #rcnn_input = slim.fully_connected(fc6, 4096, scope='fc7')
-            #if is_training:
-            #    rcnn_input = slim.dropout(rcnn_input, keep_prob=0.5, is_training=True,
-            #                        scope='dropout7')
-            #cls_prob, bbox_pred = region_classification_2d(rcnn_input, trainable,
-            #                                                     initializer, initializer_bbox)
-
-            # Turn predicted positions (float) into original image positions
+    def get_gt_pixels(self):
+        """
+        Slice first 2 dimensions of gt_pixels_placeholder (coordinates only)
+        We want it to be shape (None, 2)
+        """
+        # FIXME check that this returns the expected
+        # return tf.squeeze(self.gt_pixels_placeholder, axis=[2])
+        return tf.slice(self.gt_pixels_placeholder, [0, 0], [-1, 2])
 
     def include_gt_pixels(self, rois):
         """
-        Rois: [None, 2]
+        Rois: [None, 2] in F5 coordinates
+        Return rois in F5 coordinates
         """
         # Slice first 2 dimensions of gt_pixels_placeholder
         # We want it to be shape (None, 2)
-        gt_pixels = tf.squeeze(self.gt_pixels_placeholder, axis=[2])
+        gt_pixels = self.get_gt_pixels()
         # convert to F5 coordinates
         gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 32.0), tf.float32)
         # FIXME As soon as new version of Tensorflow supporting axis option
@@ -277,31 +279,47 @@ class PPN(object):
         mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
         return mask
 
-    def assign_gt_pixels(self, proposals):
+    def assign_gt_pixels(self, proposals, rois=None):
         """
         Proposals shape: [A*N*N, 2] (N=16 or 64)
-        gt_pixels_placeholder is shape [None, 2, 1]
+        gt_pixels_full is shape [None, 2, 1]
         Classes shape: [A*N*N, 1]
+        Rois shape: [A, 2] coordinates in F5 feature map (16x16)
+        Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
         Returns closest ground truth pixels for all pixels and corresponding distance
         """
         # Slice first 2 dimensions of gt_pixels_placeholder
         # We want it to be shape (None, 2)
-        gt_pixels = tf.squeeze(self.gt_pixels_placeholder, axis=[2])
-        # Tile to have shape (A*N*N, None, 2)
+        gt_pixels = self.get_gt_pixels()
         gt_pixels = tf.expand_dims(gt_pixels, axis=0)
-        all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
+        if rois is None:
+            # Tile to have shape (A*N*N, None, 2)
+            gt_pixels = gt_pixels / 32.0 # Convert to F5 coordinates
+            all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
+
+        else: # Translate each batch of N*N rows of all_gt_pixels w.r.t. corresponding ROI center
+            # FIXME check that this yields expected result
+            # Translation is gt_pixels / 8.0 - 4*rois[i] (with conversion to F3 coordinates)
+            # Go to shape [1, 1, None, 2]
+            gt_pixels = tf.expand_dims(gt_pixels, axis=0)
+            # Tile to shape [A, N*N, None, 2]
+            gt_pixels = tf.tile(gt_pixels, [tf.shape(rois)[0], tf.cast(tf.shape(proposals)[0]/tf.shape(rois)[0], tf.int32), 1, 1])
+            # Broadcast translation
+            all_gt_pixels = gt_pixels / 8.0 - 4.0 * rois
+            # Reshape to [A*N*N, None, 2]
+            all_gt_pixels = tf.reshape(all_gt_pixels, (tf.shape(proposals)[0], -1, 2))
+
+        assert all_gt_pixels.get_shape().as_list() == [None, None, 2]
+        # Reshape proposals to [A*N*N, 1, 2]
         proposals = tf.expand_dims(proposals, axis=1)
-        print("all_gt_pixels shape=", all_gt_pixels.shape)
-        print("intermediate shape=", tf.reduce_sum(tf.pow(proposals - all_gt_pixels, 2), axis=2, keep_dims=True).shape)
         distances = tf.sqrt(tf.reduce_sum(tf.pow(proposals - all_gt_pixels, 2), axis=2))
-        # distances.shape = [A*N*N, None, 1]
-        print("distances shape=", distances.shape)
+        # distances.shape = [A*N*N, None]
         # closest_gt.shape = [A*N*N,]
         # closest_gt[i] = indice of closest gt in gt_pixels_placeholder
         closest_gt = tf.argmin(distances, axis=1)
         closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True)
         #print("squeezed gt_pixels_placeholder shape=", tf.squeeze(tf.slice(gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1).shape)
-        closest_gt_label = tf.nn.embedding_lookup(tf.squeeze(tf.slice(self.gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1), closest_gt)
+        closest_gt_label = tf.nn.embedding_lookup(tf.slice(self.gt_pixels_placeholder, [0, 2], [-1, 1]), closest_gt)
         return closest_gt, closest_gt_distance, closest_gt_label
 
     def compute_positives_ppn1(self):
@@ -314,11 +332,10 @@ class PPN(object):
         classes = tf.zeros(shape=(16, 16)) # FIXME don't hardcode 16
         # Slice first 2 dimensions of gt_pixels_placeholder
         #gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0, 0], [-1, -1, 0])
-        gt_pixels = tf.squeeze(self.gt_pixels_placeholder, axis=[2])
+        gt_pixels = self.get_gt_pixels()
         # Convert to F5 coordinates (16x16)
         # Shape = None, 2
         gt_pixels = tf.cast(tf.floor(gt_pixels / 32.0), tf.int32)
-        print("gt_pixels shape=", gt_pixels.shape)
         # Assign positive pixels based on gt_pixels
         #classes = classes + tf.scatter_nd(gt_pixels, tf.constant(value=1.0, shape=tf.shape(gt_pixels)[0]), classes.shape)
         classes = classes + tf.scatter_nd(gt_pixels, tf.fill((tf.shape(gt_pixels)[0],), 1.0), classes.shape)
