@@ -9,7 +9,12 @@ from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import numpy as np
-import sys
+import sys, os
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 from toydata_generator import ToydataGenerator
 
@@ -40,8 +45,68 @@ class PPN(object):
 
     def train_step_with_summary(self, sess, blobs, train_op):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
-        _, summary = sess.run([self.train_op, self.summary_op], feed_dict=feed_dict)
+        _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
+        ppn1_scores, labels_ppn1, rois, summary = sess.run([
+                            self.train_op,
+                            self._predictions['ppn1_pixel_pred'],
+                            self._predictions['ppn1_cls_prob'],
+                            self._predictions['ppn1_anchors'],
+                            self._predictions['ppn1_proposals'],
+                            self._predictions['ppn1_scores'],
+                            self._predictions['labels_ppn1'],
+                            self._predictions['rois'],
+                            self.summary_op
+                            ], feed_dict=feed_dict)
+
+        print("ppn1_pixel_pred : ", ppn1_pixel_pred.shape, ppn1_pixel_pred[0][0])
+        print("ppn1_cls_prob : ", ppn1_cls_prob.shape, ppn1_cls_prob[0][0])
+        #print("ppn1_anchors : ", ppn1_anchors.shape, ppn1_anchors[0:10])
+        print("ppn1_proposals : ", ppn1_proposals.shape, ppn1_proposals[0:10])
+        print("ppn1_scores : ", ppn1_scores.shape, ppn1_scores[0:10])
+        print("labels ppn1 : ", labels_ppn1.shape, labels_ppn1)
+
+        self.display(blobs, ppn1_proposals, labels_ppn1, rois)
+
         return summary
+
+    def display(self, blob, ppn1_proposals, ppn1_labels, rois):
+        #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
+        #ax.imshow(blob['data'][0,:,:,0], interpolation='none', cmap='hot', origin='lower')
+        fig = plt.figure()
+        ax = fig.add_subplot(111, aspect='equal')
+        ax.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
+        for i in range(len(ppn1_labels)):
+            if ppn1_labels[i] == 1:
+                coord = ppn1_proposals[i]*32.0
+                ax.add_patch(
+                    patches.Rectangle(
+                        (coord[1], coord[0]),
+                        32, # width
+                        32, # height
+                        #fill=False,
+                        #hatch='\\',
+                        facecolor='green',
+                        alpha = 0.5,
+                        linewidth=2.0,
+                        edgecolor='red',
+                    )
+                )
+        for roi in rois:
+            ax.add_patch(
+                patches.Rectangle(
+                    (roi[1]*32.0, roi[0]*32.0),
+                    32, # width
+                    32, # height
+                    #fill=False,
+                    #hatch='\\',
+                    facecolor='green',
+                    alpha = 0.3,
+                    linewidth=2.0,
+                    edgecolor='black',
+                )
+            )
+        #plt.imsave('display.png', blob['data'][0,:,:,0])
+        plt.savefig('display.png')
 
     # def get_variables_to_restore(self, variables, var_keep_dic)
     # def get_summary(self, sess, blobs_val)
@@ -219,6 +284,7 @@ class PPN(object):
             self._predictions['ppn1_proposals'] = proposals
             self._predictions['ppn1_scores'] = scores
             self._predictions['ppn1_positives'] = classes_mask
+            self._predictions['labels_ppn1'] = labels_ppn1
             self._losses['loss_ppn1_point'] =  loss_ppn1_point
             self._losses['loss_ppn1_class'] = loss_ppn1_class
             #self._predictions['accuracy_ppn1'] = accuracy_ppn1
@@ -530,10 +596,13 @@ class PPN(object):
             return slim.max_pool2d(crops, [2, 2], padding='SAME')
 
 if __name__ == "__main__":
+    os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+
     if sys.argv[-1] == 'train':
-        logdir = "log"
-        outputdir = "output"
-        MAX_STEPS = 30000
+        logdir = "log/run%d" % int(sys.argv[-2])
+        outputdir = "output/run%d" % int(sys.argv[-2])
+        MAX_STEPS = 1
         # Define data generators
         train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
         test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
