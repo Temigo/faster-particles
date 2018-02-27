@@ -10,13 +10,14 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import numpy as np
 import sys, os
+from math import floor
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-from toydata_generator import ToydataGenerator
+#from toydata_generator import ToydataGenerator
 
 class PPN(object):
 
@@ -33,9 +34,18 @@ class PPN(object):
         self._losses = {}
 
     def test_image(self, sess, image):
+        self.is_training = False
         feed_dict = { self.image_placeholder: image }
-        im_proposals = sess.run([self._predictions['im_proposals']], feed_dict=feed_dict)
-        return im_proposals
+        im_proposals, ppn1_proposals, labels_ppn1, \
+        rois, ppn2_proposals, ppn2_positives = sess.run([
+            self._predictions['im_proposals'],
+            self._predictions['ppn1_proposals'],
+            self._predictions['labels_ppn1'],
+            self._predictions['rois'],
+            self._predictions['ppn2_proposals'],
+            self._predictions['ppn2_positives']
+            ], feed_dict=feed_dict)
+        return im_proposals, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives
 
     # FIXME train_op argument useless?
     def train_step(self, sess, blobs, train_op):
@@ -46,7 +56,7 @@ class PPN(object):
     def train_step_with_summary(self, sess, blobs, train_op):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
-        ppn1_scores, labels_ppn1, rois, summary = sess.run([
+        ppn1_scores, labels_ppn1, rois, ppn2_proposals, ppn2_positives, summary = sess.run([
                             self.train_op,
                             self._predictions['ppn1_pixel_pred'],
                             self._predictions['ppn1_cls_prob'],
@@ -55,58 +65,21 @@ class PPN(object):
                             self._predictions['ppn1_scores'],
                             self._predictions['labels_ppn1'],
                             self._predictions['rois'],
+                            self._predictions['ppn2_proposals'],
+                            self._predictions['ppn2_positives'],
                             self.summary_op
                             ], feed_dict=feed_dict)
 
-        print("ppn1_pixel_pred : ", ppn1_pixel_pred.shape, ppn1_pixel_pred[0][0])
-        print("ppn1_cls_prob : ", ppn1_cls_prob.shape, ppn1_cls_prob[0][0])
+        #print("ppn1_pixel_pred : ", ppn1_pixel_pred.shape, ppn1_pixel_pred[0][0])
+        #print("ppn1_cls_prob : ", ppn1_cls_prob.shape, ppn1_cls_prob[0][0])
         #print("ppn1_anchors : ", ppn1_anchors.shape, ppn1_anchors[0:10])
         print("ppn1_proposals : ", ppn1_proposals.shape, ppn1_proposals[0:10])
         print("ppn1_scores : ", ppn1_scores.shape, ppn1_scores[0:10])
-        print("labels ppn1 : ", labels_ppn1.shape, labels_ppn1)
-
-        self.display(blobs, ppn1_proposals, labels_ppn1, rois)
+        #print("labels ppn1 : ", labels_ppn1.shape, labels_ppn1)
+        print("ppn1 rois: ", rois.shape, rois[0:10])
+        print("ppn2_proposals : ", ppn2_proposals.shape, ppn2_proposals[0:10])
 
         return summary
-
-    def display(self, blob, ppn1_proposals, ppn1_labels, rois):
-        #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
-        #ax.imshow(blob['data'][0,:,:,0], interpolation='none', cmap='hot', origin='lower')
-        fig = plt.figure()
-        ax = fig.add_subplot(111, aspect='equal')
-        ax.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
-        for i in range(len(ppn1_labels)):
-            if ppn1_labels[i] == 1:
-                coord = ppn1_proposals[i]*32.0
-                ax.add_patch(
-                    patches.Rectangle(
-                        (coord[1], coord[0]),
-                        32, # width
-                        32, # height
-                        #fill=False,
-                        #hatch='\\',
-                        facecolor='green',
-                        alpha = 0.5,
-                        linewidth=2.0,
-                        edgecolor='red',
-                    )
-                )
-        for roi in rois:
-            ax.add_patch(
-                patches.Rectangle(
-                    (roi[1]*32.0, roi[0]*32.0),
-                    32, # width
-                    32, # height
-                    #fill=False,
-                    #hatch='\\',
-                    facecolor='green',
-                    alpha = 0.3,
-                    linewidth=2.0,
-                    edgecolor='black',
-                )
-            )
-        #plt.imsave('display.png', blob['data'][0,:,:,0])
-        plt.savefig('display.png')
 
     # def get_variables_to_restore(self, variables, var_keep_dic)
     # def get_summary(self, sess, blobs_val)
@@ -131,12 +104,13 @@ class PPN(object):
             # Build PPN1
             rois = self.build_ppn1(net2)
 
-            # Check if all ground truth pixels are covered by ROIs
-            # If not, add relevant ROIs on F3
-            # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
-            # but instead allow random variation
-            rois = self.include_gt_pixels(rois)
-            assert rois.get_shape().as_list() == [None, 2]
+            if self.is_training:
+                # During training time, check if all ground truth pixels are covered by ROIs
+                # If not, add relevant ROIs on F3
+                # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
+                # but instead allow random variation
+                rois = self.include_gt_pixels(rois)
+                assert rois.get_shape().as_list() == [None, 2]
             self._predictions['rois'] = rois
 
             # Pool to Pixels of Interest of intermediate layer
@@ -209,13 +183,13 @@ class PPN(object):
             ppn1 = slim.conv2d(net2,
                               512, # RPN Channels = num_outputs
                               (3, 3), # RPN Kernels : (3, 3)
-                              trainable=True,
+                              trainable=self.is_training,
                               weights_initializer=initializer,
                               scope="ppn1_conv/3x3")
             # Step 1-a) PPN 2 pixel position predictions
             # Shape of rpn_bbox_pred = 1, 16, 16, 2
             ppn1_pixel_pred = slim.conv2d(ppn1, 2, [1, 1],
-                                        trainable=True,
+                                        trainable=self.is_training,
                                         weights_initializer=initializer,
                                         padding='VALID',
                                         activation_fn=None,
@@ -224,7 +198,7 @@ class PPN(object):
             # Shape of rpn_cls_score = 1, 16, 16, 2
             # FIXME use sigmoid instead of softmax?
             ppn1_cls_score = slim.conv2d(ppn1, 2, [1, 1],
-                                        trainable=True,
+                                        trainable=self.is_training,
                                         weights_initializer=initializer,
                                         padding='VALID',
                                         activation_fn=None,
@@ -306,14 +280,14 @@ class PPN(object):
             ppn2 = slim.conv2d(rpn_pooling,
                               512, # RPN Channels = num_outputs
                               (3, 3), # RPN Kernels : (3, 3)
-                              trainable=True,
+                              trainable=self.is_training,
                               weights_initializer=initializer2,
                               scope="ppn2_conv/3x3")
             # Step 1-a) PPN 2 pixel prediction parameters
             # Proposes pixel position (x, y) w.r.t. pixel center = anchor
             # Shape of rpn_bbox_pred2 = nb_rois, 4, 4, 2
             ppn2_pixel_pred = slim.conv2d(ppn2, 2, [1, 1],
-                                        trainable=True,
+                                        trainable=self.is_training,
                                         weights_initializer=initializer2,
                                         padding='VALID',
                                         activation_fn=None,
@@ -321,7 +295,7 @@ class PPN(object):
             # Step 1-b) Generate class scores
             # Shape of rpn_cls_score2 = nb_rois, 4, 4, num_classes
             ppn2_cls_score = slim.conv2d(ppn2, self.num_classes, [1, 1],
-                                        trainable=True,
+                                        trainable=self.is_training,
                                         weights_initializer=initializer2,
                                         padding='VALID',
                                         activation_fn=None,
@@ -386,8 +360,8 @@ class PPN(object):
 
     def include_gt_pixels(self, rois):
         """
-        Rois: [None, 2] in F5 coordinates
-        Return rois in F5 coordinates
+        Rois: [None, 2] in F5 coordinates (floating point)
+        Return rois in F5 coordinates (round coordinates)
         """
         # Slice first 2 dimensions of gt_pixels_placeholder
         # We want it to be shape (None, 2)
@@ -397,7 +371,7 @@ class PPN(object):
         # FIXME As soon as new version of Tensorflow supporting axis option
         # for tf.unique, replace the following rough patch.
         # In the meantime, we will have some duplicates between rois and gt_pixels.
-        rois = tf.concat([rois, gt_pixels_coord], axis=0) # shape [None, 2]
+        rois = tf.concat([tf.floor(rois), gt_pixels_coord], axis=0) # shape [None, 2]
         #rois = tf.sets.set_union(tf.cast(rois, tf.int32), tf.cast(gt_pixels_coord, tf.int32))
         #rois, _, _ = tf.unique_with_counts(rois)
         #print(rois)
@@ -596,60 +570,20 @@ class PPN(object):
             return slim.max_pool2d(crops, [2, 2], padding='SAME')
 
 if __name__ == "__main__":
-    os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+    net = PPN()
+    net.create_architecture()
+    # Dummy 4x4 image
+    #dummy_rpn_cls_prob = np.ndarray([[[[0.5, 0.5], [0.5, 0.5]], [[0.5, 0.5], [0.5, 0.5]]]])
+    #dummy_rpn_bbox_pred = np.ndarray([])
+    #dummy_anchors =
+    #dummy_input_shape =
+    #proposal_layer_2d(dummy_rpn_cls_prob, dummy_rpn_bbox_pred, dummy_anchors, dummy_input_shape)
 
-    if sys.argv[-1] == 'train':
-        logdir = "log/run%d" % int(sys.argv[-2])
-        outputdir = "output/run%d" % int(sys.argv[-2])
-        MAX_STEPS = 1
-        # Define data generators
-        train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-        test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-
-        net = PPN()
-        net.create_architecture()
-        saver = tf.train.Saver()
-
-        with tf.Session() as sess:
-            summary_writer_train = tf.summary.FileWriter(logdir + '/train', sess.graph)
-            summary_writer_test = tf.summary.FileWriter(logdir + '/test', sess.graph)
-            sess.run(tf.global_variables_initializer())
-            for step in range(MAX_STEPS):
-                is_testing = step%10 == 5
-                if is_testing:
-                    blob = test_toydata.forward()
-                else:
-                    blob = train_toydata.forward()
-
-                print("Step %d" % step)
-                summary = net.train_step_with_summary(sess, blob, None)
-
-                if is_testing:
-                    summary_writer_test.add_summary(summary, step)
-                else:
-                    summary_writer_train.add_summary(summary, step)
-
-                if step%1000 == 0:
-                    save_path = saver.save(sess, outputdir + "/model-%d.ckpt" % step)
-
-            summary_writer_train.close()
-            summary_writer_test.close()
-    else:
-        net = PPN()
-        net.create_architecture()
-        # Dummy 4x4 image
-        #dummy_rpn_cls_prob = np.ndarray([[[[0.5, 0.5], [0.5, 0.5]], [[0.5, 0.5], [0.5, 0.5]]]])
-        #dummy_rpn_bbox_pred = np.ndarray([])
-        #dummy_anchors =
-        #dummy_input_shape =
-        #proposal_layer_2d(dummy_rpn_cls_prob, dummy_rpn_bbox_pred, dummy_anchors, dummy_input_shape)
-
-        """image = tf.placeholder(tf.float32,[1,512,512,3])
-        net.set_input_shape(image)
-        # Create a session
-        sess = tf.InteractiveSession()
-        # Initialize variables
-        sess.run(tf.global_variables_initializer())
-        #ret = sess.run(net._anchors,feed_dict={})
-        #print('{:s}'.format(ret))"""
+    """image = tf.placeholder(tf.float32,[1,512,512,3])
+    net.set_input_shape(image)
+    # Create a session
+    sess = tf.InteractiveSession()
+    # Initialize variables
+    sess.run(tf.global_variables_initializer())
+    #ret = sess.run(net._anchors,feed_dict={})
+    #print('{:s}'.format(ret))"""
