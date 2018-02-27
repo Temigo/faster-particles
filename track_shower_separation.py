@@ -139,7 +139,7 @@ class ClassificationNetwork(object):
         accuracy = []
         track_lengths = []
         with tf.Session() as sess:
-            self.saver.restore(sess, sys.argv[3])
+            self.saver.restore(sess, sys.argv[1])
             for track_length in range(1, self.N):
                 toydata = ToydataGenerator(self.N, self.max_tracks, 1, max_track_length=track_length, classification=True, seed=track_length)
                 for i in range(100):
@@ -159,7 +159,7 @@ class ClassificationNetwork(object):
         accuracy_error = []
         kinks = []
         with tf.Session() as sess:
-            self.saver.restore(sess, sys.argv[3])
+            self.saver.restore(sess, sys.argv[1])
             for max_kinks in range(1, 11):
                 toydata = ToydataGenerator(self.N, self.max_tracks, max_kinks, max_track_length=self.max_track_length, classification=True, seed=max_kinks, kinks=max_kinks)
                 acc_kink = []
@@ -183,7 +183,7 @@ class ClassificationNetwork(object):
         self.max_kinks = 10
         toydata = ToydataGenerator(self.N, self.max_tracks, self.max_kinks, max_track_length=self.max_track_length, classification=True, seed=0)
         with tf.Session() as sess:
-            self.saver.restore(sess, sys.argv[3])
+            self.saver.restore(sess, sys.argv[1])
             for i in range(10):
                 blob = toydata.forward()
                 print blob
@@ -207,5 +207,3 @@ if __name__ == '__main__':
         c.plot_track_length()
     elif sys.argv[-1] == 'kink':
         c.plot_kinks()
-
-

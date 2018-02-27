@@ -1,16 +1,16 @@
 import numpy as np
 from skimage.draw import line_aa
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 #%matplotlib inline
 
 args_def = dict(
-    nx = 256,        
-    ny = 256,      
-    nlines = 10,     
-    dtheta = np.radians(20),        
+    nx = 256,
+    ny = 256,
+    nlines = 10,
+    dtheta = np.radians(20),
     lmin = 30,
     lmax = 100,
     keep = 7,
@@ -56,34 +56,34 @@ def make_showerset(args):
             plt.imshow(img)
             plt.savefig('shower_%d.png'%i)
             plt.close()
-        if i != 0 and i%20==0: print(i, ' done')        
+        if i != 0 and i%20==0: print(i, ' done')
 
 if __name__ == '__main__':
     '''
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    
+
     parser.add_argument('--nx', type=int, default = args_def['nx'],
                         help='x dimension of canvas, 128')
-    
+
     parser.add_argument("--ny", type=int, default = args_def['ny'],
                         help="y dimension of canvas, 128")
-    
+
     parser.add_argument("--nlines", type=int, default = args_def['nlines'],
                         help="number of shower lines coming out of starting point, 10")
-    
+
     parser.add_argument("--dtheta", type=int, default = args_def['dtheta'],
                         help="angular range of shower lines (stdev of Gaussian), 20 deg")
-    
+
     parser.add_argument("--lmin", type=int, default = args_def['lmin'],
                         help="minimum shower line length: must be < lmax, 20")
-    
+
     parser.add_argument("--lmax", type=int, default = args_def['lmax'],
                         help="maximum shower line length: must be in (lmin+1, max(nx,ny)/2-1), 63")
-        
+
     parser.add_argument("--keep", type=int, default = args_def['keep'],
                         help="number of pixels around the starting point to keep, 7")
-    
+
     parser.add_argument('--keep_prob', type=float, default = args_def['keep_prob'],
                         help='probability of keeping a pixel, 0.6')
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--out_png', type=bool, default=args_def['out_png'],
                         help='whether to output png file, False')
-    
+
     args = parser.parse_args()
     '''
     make_showerset(args = args_def)
