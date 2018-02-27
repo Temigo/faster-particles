@@ -48,9 +48,9 @@ class ToydataGenerator(object):
             if self.kinks is None:
                 if np.random.random() < 0.5:
                     output_showers, shower_start_points = np.zeros((self.N, self.N)), []
-                    output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, 
-                                                                                            max_kinks=self.max_kinks, 
-                                                                                            max_track_length=self.max_track_length, 
+                    output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks,
+                                                                                            max_kinks=self.max_kinks,
+                                                                                            max_track_length=self.max_track_length,
                                                                                             padding=self.gt_box_padding)
                     # start and end are ill-defined without charge gradient
                     track_edges = track_start_points + track_end_points
@@ -64,10 +64,10 @@ class ToydataGenerator(object):
                     image_label = 2 # shower image
             else:
                 output_showers, shower_start_points = np.zeros((self.N, self.N)), []
-                output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, 
-                                                                                        max_kinks=self.max_kinks, 
-                                                                                        max_track_length=self.max_track_length, 
-                                                                                        padding=self.gt_box_padding, 
+                output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks,
+                                                                                        max_kinks=self.max_kinks,
+                                                                                        max_track_length=self.max_track_length,
+                                                                                        padding=self.gt_box_padding,
                                                                                         kinks=self.kinks)
                 # start and end are ill-defined without charge gradient
                 track_edges = track_start_points + track_end_points
@@ -83,6 +83,7 @@ class ToydataGenerator(object):
 
         bbox_labels = []
         simple_labels = []
+        gt_pixels = []
 
         # find bbox for shower
         # FIXME what happens if output_showers is empty ?
@@ -93,6 +94,7 @@ class ToydataGenerator(object):
                                 shower_start_points[1]+self.gt_box_padding,
                                 2]) # 2 for shower_start
             simple_labels.append([2])
+            gt_pixels.append([shower_start_points[0], shower_start_points[1], 2])
 
         # find bbox for tracks
         if track_edges:
@@ -104,6 +106,7 @@ class ToydataGenerator(object):
                                     1 # 1 for track_edge
                              ])
                 simple_labels.append([1])
+                gt_pixels.append([track_edges[i][0], track_edges[i][1], 1])
 
         output = np.maximum(output_showers, output_tracks) #.reshape([1, self.N, self.N, 1])
 
@@ -116,7 +119,9 @@ class ToydataGenerator(object):
         blob['im_info'] = [1, self.N, self.N, 3]
         blob['gt_boxes'] = np.array(bbox_labels)
         blob['gt_labels'] = np.array(simple_labels)
-        blob['image_label'] = np.array([[image_label]])
+        blob['gt_pixels'] = np.array(gt_pixels)
+        if self.classification:
+            blob['image_label'] = np.array([[image_label]])
         if self.classification and image_label == 1:
             blob['track_length'] = track_length
             blob['kinks'] = kinks
