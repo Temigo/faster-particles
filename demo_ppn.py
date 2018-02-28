@@ -17,7 +17,7 @@ import sys
 from ppn import PPN
 from toydata_generator import ToydataGenerator
 
-def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None, rois=None, ppn2_proposals=None, ppn2_positives=None, index=0):
+def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None, rois=None, ppn2_proposals=None, ppn2_positives=None, index=0, name='display'):
     #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
     #ax.imshow(blob['data'][0,:,:,0], interpolation='none', cmap='hot', origin='lower')
     fig = plt.figure()
@@ -84,7 +84,7 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None, rois
         for proposal in im_proposals:
             plt.plot([proposal[1]], [proposal[0]], 'y+')
     #plt.imsave('display.png', blob['data'][0,:,:,0])
-    plt.savefig('display%d.png' % index)
+    plt.savefig(name + '%d.png' % index)
 
 def inference():
     toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)

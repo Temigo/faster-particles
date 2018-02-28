@@ -20,12 +20,6 @@ class PPN(object):
         self.is_training = is_training
         self.num_classes = num_classes # background, track edge, shower start
         self.N = N
-        self.base_num_filters = 64 # num of output filters in 1st layers of vgg
-        self.finlayer_index = 5 # which layer to use for PPN1, e.g. 5 means F5
-        self.finlayer_size = self.N/(2**self.finlayer_index) # assume this is also 'total number of stride-2 downsizing' 
-                                                             # e.g. 5 means we downsize by a factor of 2**5 in base net
-        self.midlayer_index = 3 # which intermediate layer to use for PPN2, e.g. 3 means F3
-        self.midlayer_size = self.N/(2**self.midlayer_index)
         self.ppn1_score_threshold = 0.5
         self.ppn2_distance_threshold = 2
         self.lr = 0.001 # Learning rate
@@ -86,7 +80,7 @@ class PPN(object):
     def create_architecture(self):
         # Define placeholders
         # FIXME Assuming batch size of 1 currently
-        self.image_placeholder       = tf.placeholder(name="image", shape=(1, self.N, self.N, 3), dtype=tf.float32)
+        self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
         # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
         self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
 
@@ -115,9 +109,8 @@ class PPN(object):
             # FIXME How do we want to do the ROI pooling?
             # Shape of rpn_pooling = nb_rois, 4, 4, 256
             rpn_pooling = self.crop_pool_layer_2d(net, rois)
-            assert rpn_pooling.get_shape().as_list() == [None, self.midlayer_size/self.finlayer_size, self.midlayer_size/self.finlayer_size, self.finlayer_size**2]
+            assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
-<<<<<<< Updated upstream
             proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
             if self.is_training:
@@ -137,17 +130,16 @@ class PPN(object):
 
             else: # Testing time
                 # Turn predicted positions (float) into original image positions
-                # Convert proposals2 ROI 4x4 coordinates to 64x64 F3 coordinates
+                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
                 # then back to original image.
                 # FIXME take top scores only? or leave it to the demo script
-                f3_proposals = tf.reshape(proposals2, (-1, 16, 2))
-                im_proposals = (f3_proposals + 4*tf.expand_dims(rois, axis=1))*8.0
+                im_proposals = (proposals2 + 4*rois)*8.0
                 im_labels = tf.argmax(scores2, axis=1)
                 im_scores = tf.gather(scores2, im_labels)
                 self._predictions['im_proposals'] = im_proposals
                 self._predictions['im_labels'] = im_labels
                 self._predictions['im_scores'] = im_scores
-                # We have now 4*4*num_roi proposals and corresponding labels in original image.
+                # We have now num_roi proposals and corresponding labels in original image.
                 # Pixel NMS equivalent ?
 
     def build_vgg(self):
@@ -155,24 +147,21 @@ class PPN(object):
         # --- VGG16 net = 13 conv layers with 5 max-pooling ---
         # =====================================================
         with tf.variable_scope("vgg_16"):
-
-            for i in range(self.finlayer_index-1):
-                
-                net = slim.repeat(self.image_placeholder, 2, slim.conv2d, self.base_num_filters*2**i, [3, 3],
-                                  trainable=False, scope='conv%d'%(i+1))
-                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool%d'%(i+1))
-            
-                if i ==  midlayer_index -1:
-                    net2 = net
-
-                if i> midlayer_index -1:
-                    net2 = slim.repeat(self.image_placeholder, 2, slim.conv2d, self.base_num_filters*2**i, [3, 3],
-                                       trainable=False, scope='conv%d'%(i+1))
-                    net2 = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool%d'%(i+1)) 
-
-            net2 = slim.repeat(net2, 3, slim.conv2d, self.base_num_filters*2**(self.finlayer_index-2), [3, 3],
+            net = slim.repeat(self.image_placeholder, 2, slim.conv2d, 64, [3, 3],
+                              trainable=False, scope='conv1')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
+            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
+                            trainable=False, scope='conv2')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
+            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
+                            trainable=self.is_training, scope='conv3')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
+            net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
+                            trainable=self.is_training, scope='conv4')
+            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
+            net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
                             trainable=self.is_training, scope='conv5')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool%d'%self.finlayer_index)
+            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
             # After 5 times (2, 2) pooling, if input image is 512x512
             # the feature map should be spatial dimensions 16x16.
             return net, net2
@@ -188,8 +177,8 @@ class PPN(object):
             # Step 0) Convolution for RPN/Detection shared layer
             # Shape of rpn = 1, 16, 16, 512
             ppn1 = slim.conv2d(net2,
-                              self.base_num_filters*2**(self.finlayer_index-2), # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels : (3, 3)
+                              512, # RPN Channels = num_outputs
+                              (3, 3), # RPN Kernels
                               trainable=self.is_training,
                               weights_initializer=initializer,
                               scope="ppn1_conv/3x3")
@@ -219,15 +208,15 @@ class PPN(object):
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Generate anchors = pixel centers of the last feature map.
             # Shape of anchors = 16*16, 2
-            anchors = self.generate_anchors(width=self.finlayer_size, height=self.finlayer_size)
-            assert anchors.get_shape().as_list() == [self.finlayer_size**2, 2]
+            anchors = self.generate_anchors(width=16, height=16) # FIXME express width and height better
+            assert anchors.get_shape().as_list() == [256, 2]
 
             # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
             # and anchors. Take the first R proposed pixels which contain an object.
             proposals, scores = self.predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors)
             rois, roi_scores = self.top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
-            assert proposals.get_shape().as_list() == [self.finlayer_size**2, 2]
-            assert scores.get_shape().as_list() == [self.finlayer_size**2, 1]
+            assert proposals.get_shape().as_list() == [256, 2]
+            assert scores.get_shape().as_list() == [256, 1]
             assert rois.get_shape().as_list() == [None, 2]
             assert roi_scores.get_shape().as_list() == [None, 1]
 
@@ -282,19 +271,19 @@ class PPN(object):
         with tf.variable_scope("ppn2"):
             # Define initializers
             initializer2=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
-            batch_size = tf.shape(rpn_pooling)[0]
+            batch_size = tf.shape(rpn_pooling)[0] # should be number of rois x number of pixels per roi
             # Step 0) Convolution for PPN2 intermediate layer
             # Based on F3 feature map (ie after 3 max-pool layers in VGG)
-            # Shape = nb_rois, 4, 4, 512
+            # Shape = nb_rois, 1, 1, 512
             ppn2 = slim.conv2d(rpn_pooling,
-                               self.base_num_filters*2**(self.finlayer_index-2), # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels : (3, 3)
+                              512, # RPN Channels = num_outputs
+                              (3, 3), # RPN Kernels FIXME change this to (1, 1)?
                               trainable=self.is_training,
                               weights_initializer=initializer2,
                               scope="ppn2_conv/3x3")
             # Step 1-a) PPN 2 pixel prediction parameters
             # Proposes pixel position (x, y) w.r.t. pixel center = anchor
-            # Shape of rpn_bbox_pred2 = nb_rois, 4, 4, 2
+            # Shape of rpn_bbox_pred2 = nb_rois, 1, 1, 2
             ppn2_pixel_pred = slim.conv2d(ppn2, 2, [1, 1],
                                         trainable=self.is_training,
                                         weights_initializer=initializer2,
@@ -302,7 +291,7 @@ class PPN(object):
                                         activation_fn=None,
                                         scope='ppn2_pixel_pred2')
             # Step 1-b) Generate class scores
-            # Shape of rpn_cls_score2 = nb_rois, 4, 4, num_classes
+            # Shape of rpn_cls_score2 = nb_rois, 1, 1, num_classes
             ppn2_cls_score = slim.conv2d(ppn2, self.num_classes, [1, 1],
                                         trainable=self.is_training,
                                         weights_initializer=initializer2,
@@ -311,18 +300,15 @@ class PPN(object):
                                         scope='ppn2_cls_score')
             # Compute softmax
             ppn2_cls_prob = tf.nn.softmax(ppn2_cls_score) # FIXME might need a reshape here
-            # print("rpn_cls_prob2 shape=", rpn_cls_prob2.shape)
 
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Anchors are defined as center of pixels
             # Shape [nb_rois * 4 * 4 , 2]
-            anchors2 = self.generate_anchors(width=self.midlayer_size/self.finlayer_size, 
-                                             height=self.midlayer_size/self.finlayer_size, 
-                                             repeat=batch_size)
+            anchors2 = self.generate_anchors(width=1, height=1, repeat=batch_size) # FIXME express width and height better
             assert anchors2.get_shape().as_list() == [None, 2]
             # Derive proposed points from delta predictions (rpn_bbox_pred2) w.r.t. pixels centers
-            # Coordinates of proposals2 are in 4x4 ROI area
-            # We have 4*4*num_roi proposals and corresponding scores
+            # Coordinates of proposals2 are in 1x1 ROI area
+            # We have 1*1*num_roi proposals and corresponding scores
             proposals2, scores2 = self.predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, classes=True)
             assert proposals2.get_shape().as_list() == [None, 2]
             assert scores2.get_shape().as_list() == [None, self.num_classes]
@@ -375,20 +361,32 @@ class PPN(object):
     def include_gt_pixels(self, rois):
         """
         Rois: [None, 2] in F5 coordinates (floating point)
-        Return rois in F5 coordinates (round coordinates)
+        These ROIs are 4x4 on F3 feature map. Include 3x3 F3 pixels around pixels
+        containing ground truth points.
+        Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
         """
         # Slice first 2 dimensions of gt_pixels_placeholder
         # We want it to be shape (None, 2)
         gt_pixels = self.get_gt_pixels()
-        # convert to F5 coordinates
-        gt_pixels_coord = tf.cast(tf.floor(gt_pixels / (2.**self.finlayer_index)), tf.float32)
+        # convert to F3 coordinates
+        gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 8.0), tf.float32) # FIXME hardcoded
+        # Get 3x3 pixels around this in F3
+        gt_pixels_coord = tf.expand_dims(gt_pixels_coord, axis=1)
+        #gt_pixels_coord = tf.transpose(gt_pixels_coord, perms=[0, 2, 1])
+        gt_pixels_coord = tf.tile(gt_pixels_coord, [1, 9, 1]) # shape N x 9 x 2
+        update = tf.constant([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]], dtype=tf.float32)
+        update = tf.tile(tf.expand_dims(update, axis=0), [tf.shape(gt_pixels_coord)[0], 1, 1])
+        gt_pixels_coord = gt_pixels_coord + update
+        gt_pixels_coord = tf.reshape(gt_pixels_coord, (-1, 2)) # Shape N*9, 2
+        # FIXME Clip it to F3 size
+        # indices = tf.where(tf.less(gt_pixels_coord, 64))
+        # gt_pixels_coord = tf.gather_nd(gt_pixels_coord, indices)
+        # Go back to F5 coordinates
+        gt_pixels_coord = gt_pixels_coord / 4.0 # FIXME hardcoded
         # FIXME As soon as new version of Tensorflow supporting axis option
         # for tf.unique, replace the following rough patch.
         # In the meantime, we will have some duplicates between rois and gt_pixels.
         rois = tf.concat([tf.floor(rois), gt_pixels_coord], axis=0) # shape [None, 2]
-        #rois = tf.sets.set_union(tf.cast(rois, tf.int32), tf.cast(gt_pixels_coord, tf.int32))
-        #rois, _, _ = tf.unique_with_counts(rois)
-        #print(rois)
         assert rois.get_shape().as_list() == [None, 2]
         return rois
 
@@ -465,13 +463,13 @@ class PPN(object):
         Returns classes with shape (16*16,1)
         """
         with tf.variable_scope("ppn1_compute_positives"):
-            classes = tf.zeros(shape=(self.finlayer_size, self.finlayer_size)) 
+            classes = tf.zeros(shape=(16, 16)) # FIXME don't hardcode 16
             # Slice first 2 dimensions of gt_pixels_placeholder
             #gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0, 0], [-1, -1, 0])
             gt_pixels = self.get_gt_pixels()
             # Convert to F5 coordinates (16x16)
             # Shape = None, 2
-            gt_pixels = tf.cast(tf.floor(gt_pixels / (2.**self.finlayer_index)), tf.int32)
+            gt_pixels = tf.cast(tf.floor(gt_pixels / 32.0), tf.int32)
             # Assign positive pixels based on gt_pixels
             #classes = classes + tf.scatter_nd(gt_pixels, tf.constant(value=1.0, shape=tf.shape(gt_pixels)[0]), classes.shape)
             classes = classes + tf.scatter_nd(gt_pixels, tf.fill((tf.shape(gt_pixels)[0],), 1.0), classes.shape)
@@ -537,10 +535,11 @@ class PPN(object):
         """
         with tf.variable_scope("predicted_pixels"):
             # Select pixels that contain something
-            scores = rpn_cls_prob[:, :, :, 1:]
             if classes:
+                #scores = rpn_cls_prob[:, :, :, 2:]
                 scores = tf.reshape(rpn_cls_prob, (-1, rpn_cls_prob.get_shape().as_list()[-1]))
             else:
+                scores = rpn_cls_prob[:, :, :, 1:] # FIXME
                 # Reshape to a list in the order of anchors
                 # rpn_bbox_pred = tf.reshape(rpn_bbox_pred, (-1, 2))
                 scores = tf.reshape(scores, (-1, 1))
@@ -559,17 +558,28 @@ class PPN(object):
         """
         Crop and pool intermediate F3 layer.
         Net.shape = [1, 64, 64, 256]
-        Rois.shape = [None, 2] # Could be less than R
+        Rois.shape = [None, 2] # Could be less than R, assumes coordinates on F5
+        Also assumes ROIs are 1x1 pixels on F3
         """
         with tf.variable_scope("crop_pool_layer"):
             assert net.get_shape().as_list() == [1, 64, 64, 256]
             assert rois.get_shape().as_list() == [None, 2]
-            # Convert rois to normalized coordinates in [0, 1] of 64x64 feature map
-            rois = rois / 16.0
+            # Convert rois from F5 coordinates to F3 coordinates (x4)
+            rois = (rois*4.0) # FIXME hardcoded
             # Shape of boxes = [num_boxes, 4]
             # boxes[i] is specified in normalized coordinates [y1, x1, y2, x2]
             # with y1 < y2 ideally
-            boxes = tf.concat([rois, rois+4], axis=1)
+            # rois_x = tf.slice(rois, [0, 0], [-1, 1])
+            # rois_y = tf.slice(rois, [0, 1], [-1, 1])
+            # rois = tf.concat([
+            #     tf.concat([rois_x, rois_y], axis=1),
+            #     tf.concat([rois_x, rois_y+1], axis=1),
+            #     tf.concat([rois_x+1, rois_y], axis=1),
+            #     tf.concat([rois_x+1, rois_y+1], axis=1)
+            #     ], axis=0)
+            boxes = tf.concat([rois, rois+1], axis=1)
+            # then to normalized coordinates in [0, 1] of F3 feature map
+            boxes = boxes / 16.0 # FIXME hardcoded
             assert boxes.get_shape().as_list() == [None, 4]
 
             # Shape of box_ind = [num_boxes] with values in [0, batch_size)
@@ -577,7 +587,8 @@ class PPN(object):
             box_ind = tf.fill((tf.shape(rois)[0],), 0)
             # 1-D tensor of 2 elements = [crop_height, crop_width]
             # All cropped image patches are resized to this size
-            crop_size = tf.constant([4*2, 4*2])
+            # We want size 1x1 after max_pool2d
+            crop_size = tf.constant([1*2, 1*2])
             crops = tf.image.crop_and_resize(net, boxes, box_ind, crop_size, name="crops1")
             # crops is a 4-D tensor of shape [num_boxes, crop_height, crop_width, depth]
             return slim.max_pool2d(crops, [2, 2], padding='SAME')

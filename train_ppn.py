@@ -1,14 +1,17 @@
 # *-* encoding: utf-8 *-*
-# Usage: python train_ppn.py i max_steps vgg.ckpt
+# Usage: python train_ppn.py i max_steps [vgg.ckpt]
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
 import sys, os
+import matplotlib
+matplotlib.use('Agg')
 
 from ppn import PPN
 from toydata_generator import ToydataGenerator
+from demo_ppn import display
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
@@ -32,6 +35,7 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for step in range(MAX_STEPS):
         is_testing = step%10 == 5
+        is_drawing = step%10 == 0
         if is_testing:
             blob = test_toydata.forward()
         else:
@@ -41,10 +45,11 @@ with tf.Session() as sess:
         print(blob['gt_pixels'])
 
         if is_testing:
-            net.test_image(blob)
+            net.test_image(sess, blob)
         else:
             summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = net.train_step_with_summary(sess, blob, None)
-
+            if is_drawing:
+                display(blob, ppn1_proposals=ppn1_proposals, ppn1_labels=labels_ppn1, rois=rois, ppn2_proposals=ppn2_proposals, ppn2_positives=ppn2_positives, index=step, name='display_train')
         if is_testing:
             summary_writer_test.add_summary(summary, step)
         else:
