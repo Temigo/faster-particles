@@ -1,23 +1,10 @@
 import numpy as np
 from skimage.draw import line_aa
 import matplotlib
-#matplotlib.use('Agg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 #%matplotlib inline
-
-args_def = dict(
-    nx = 256,
-    ny = 256,
-    nlines = 10,
-    dtheta = np.radians(20),
-    lmin = 30,
-    lmax = 100,
-    keep = 7,
-    keep_prob = 0.6,
-    nimages = 2,
-    out_png = False,
-)
 
 def make_shower(args):
 
@@ -31,8 +18,15 @@ def make_shower(args):
 
     # randomly generate nlines endpoints such that the lines fall
     # within around dtheta of theta0
-    thetas = np.random.normal(loc=theta0, scale=args['dtheta'], size=(args['nlines'],1))
-    lengths = np.random.uniform(low=args['lmin'], high=args['lmax'], size=(args['nlines'],1))
+    if args['dtheta'] < 0:
+        dtheta = np.random.uniform(0.5*np.pi)
+        thetas = np.random.normal(loc=theta0, scale=dtheta, size=(args['nlines'], 1))
+    else:
+        dtheta = args['dtheta']
+        thetas = np.linspace(theta0-dtheta, theta0+dtheta, args['nlines']).reshape(args['nlines'], 1)
+        #thetas = np.random.uniform(low=0., high=2.*dtheta, size=(args['nlines'], 1))
+        
+    lengths = np.random.uniform(low=args['lmin'], high=args['lmax'], size=(args['nlines'], 1))
 
     # draw shower lines
     for pos in np.hstack(((vx+lengths*np.cos(thetas)+0.5).astype(int), (vy+lengths*np.sin(thetas)+0.5).astype(int))):
@@ -46,53 +40,52 @@ def make_shower(args):
     indices1[vx-args['keep']:vx+args['keep'], vy-args['keep']:vy+args['keep']] = 0
     img[np.logical_and(indices0, indices1)] = 0
 
-    return img, (vx,vy)
+    return img, (vx,vy), (2.*dtheta)
 
 def make_showerset(args):
+    blob = {}
+    batch_data = np.zeros((args['nimages'], args['nx'], args['ny']))
+    batch_angles = np.zeros((args['nimages'],))
     for i in range(args['nimages']):
-        img, _ = make_shower(args)
-        np.savetxt('shower_%d.txt'%i,img)
+        img, _, a = make_shower(args)
+        batch_data[i,:,:] = img
+        batch_angles[i] = a
         if args['out_png']:
             plt.imshow(img)
             plt.savefig('shower_%d.png'%i)
             plt.close()
         if i != 0 and i%20==0: print(i, ' done')
+    #batch_data = batch_data.reshape(args['nimages'], args['nx'], args['ny'], 1)
+    #np.savetxt('batch_data_shower.txt', batch_data.reshape(-1))
+    #np.savetxt('batch_angles.txt', batch_angles)
+    blob['data'] = batch_data
+    blob['labels'] = np.ones(args['nimages'],)
+    blob['angles'] = batch_angles
+    return blob
 
 if __name__ == '__main__':
     '''
     from argparse import ArgumentParser
     parser = ArgumentParser()
-
+    
     parser.add_argument('--nx', type=int, default = args_def['nx'],
                         help='x dimension of canvas, 128')
-
-    parser.add_argument("--ny", type=int, default = args_def['ny'],
-                        help="y dimension of canvas, 128")
-
-    parser.add_argument("--nlines", type=int, default = args_def['nlines'],
-                        help="number of shower lines coming out of starting point, 10")
-
-    parser.add_argument("--dtheta", type=int, default = args_def['dtheta'],
-                        help="angular range of shower lines (stdev of Gaussian), 20 deg")
-
-    parser.add_argument("--lmin", type=int, default = args_def['lmin'],
-                        help="minimum shower line length: must be < lmax, 20")
-
-    parser.add_argument("--lmax", type=int, default = args_def['lmax'],
-                        help="maximum shower line length: must be in (lmin+1, max(nx,ny)/2-1), 63")
-
-    parser.add_argument("--keep", type=int, default = args_def['keep'],
-                        help="number of pixels around the starting point to keep, 7")
-
-    parser.add_argument('--keep_prob', type=float, default = args_def['keep_prob'],
-                        help='probability of keeping a pixel, 0.6')
-
-    parser.add_argument('--nimages', type=int, default = args_def['nimages'],
-                        help='number of images to generate, 100')
-
-    parser.add_argument('--out_png', type=bool, default=args_def['out_png'],
-                        help='whether to output png file, False')
-
-    args = parser.parse_args()
     '''
-    make_showerset(args = args_def)
+    args_def = dict(
+        nx = 256,        
+        ny = 256,      
+        nlines = 10,     
+        dtheta = np.radians(0.001),
+        lmin = 30,
+        lmax = 100,
+        keep = 7,
+        keep_prob = 0.6,
+        nimages = 100,
+        out_png = False,
+    )
+    batch_shape = make_showerset(args = args_def)
+    print batch_shape
+    #img, (x,y), a = make_shower(args_def)
+    #print img.shape
+    #print x,y
+    #print a
