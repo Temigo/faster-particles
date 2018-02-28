@@ -31,7 +31,7 @@ def pixels_transform_inv(pixels, deltas):
 
 def top_R_pixels(proposals, scores, R=20, threshold=0.5):
     """
-    Order by score and take the top R proposals.
+    Order by score and take the top R proposals above threshold.
     Shapes are [N*N, 2] and [N*N, 1]
     """
     with tf.variable_scope("top_R_pixels"):
