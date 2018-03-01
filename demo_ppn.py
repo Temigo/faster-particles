@@ -95,6 +95,7 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
 
     #plt.imsave('display.png', blob['data'][0,:,:,0])
     plt.savefig('display/' + name + '%d.png' % index)
+    plt.close(fig)
 
 def inference():
     toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
