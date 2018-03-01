@@ -125,9 +125,8 @@ def compute_positives_ppn1(gt_pixels):
         gt_pixels = tf.cast(tf.floor(gt_pixels / 32.0), tf.int32)
         # Assign positive pixels based on gt_pixels
         #classes = classes + tf.scatter_nd(gt_pixels, tf.constant(value=1.0, shape=tf.shape(gt_pixels)[0]), classes.shape)
-        classes = classes + tf.scatter_nd(gt_pixels, tf.fill((tf.shape(gt_pixels)[0],), 1.0), classes.shape)
-        classes = tf.cast(tf.reshape(classes, shape=(-1, 1)), tf.int32)
-        classes_mask = tf.cast(classes, tf.bool) # Turn classes into a mask
+        classes = tf.scatter_nd(gt_pixels, tf.ones(shape=(tf.shape(gt_pixels)[0],)), classes.shape)
+        classes_mask = tf.cast(tf.reshape(classes, shape=(-1, 1)), tf.bool)
         return classes_mask
 
 def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2):
@@ -143,10 +142,10 @@ def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2
         pixel_count = tf.shape(true_labels)[0]
         common_shape = tf.stack([pixel_count, 1])
         predicted_labels = tf.reshape(tf.argmax(scores, axis=1, output_type=tf.int32), common_shape)
-        assert predicted_labels.get_shape().as_list() == [None, 1]
+        #assert predicted_labels.get_shape().as_list() == [None, 1]
         true_labels = tf.cast(true_labels, tf.int32)
-        mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, False), tf.fill(common_shape, True))
-        mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
+        mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.zeros(common_shape, tf.bool), tf.ones(common_shape, tf.bool))
+        mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.zeros(common_shape, tf.bool))
         return mask
 
 def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None):

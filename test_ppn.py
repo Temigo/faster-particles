@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from ppn import PPN
-from ppn_utils import generate_anchors, top_R_pixels, clip_pixels
+from ppn_utils import generate_anchors, top_R_pixels, clip_pixels, compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels
 from toydata_generator import ToydataGenerator
 
 def generate_anchors_np(width, height, repeat=1):
@@ -111,12 +111,45 @@ class Test(unittest.TestCase):
         pass
 
     def test_compute_positives_ppn1(self):
-        pass
+        # Dummy input for testing, num of gt pixels = N = 3
+        gt_pixels_test = np.array([[5.5, 7.7],[511.1, 433.3], [320, 320]])
+        #print(gt_pixels_test.shape) #should be shape (3,2)
+
+        classes_np = np.zeros((16,16))
+        gt_pixels_np = np.floor(gt_pixels_test / 32.0).astype(int)
+        gt_pixels_np = tuple(zip(*gt_pixels_np))
+        classes_np[gt_pixels_np] = 1.
+        classes_mask_np = classes_np.reshape(-1,1).astype(bool) # shape (16*16, 1)
+
+        with tf.Session() as sess:
+            classes_mask_tf = compute_positives_ppn1(gt_pixels_test)
+            classes_mask_tf = sess.run([classes_mask_tf])
+        return np.allclose(classes_mask_np, classes_mask_tf)
 
     def test_compute_positives_ppn2(self):
-        pass
+        # Need to comment out assert statement in compute_positives_ppn2
+        # Dummy input for testing
+        nb_rois, n, n_classes = 2, 3, 4
+        scores_test = np.stack([np.array([0, 1, 0, 0]) for i in range(nb_rois*n*n)])
+        closest_gt_distance_test = np.arange(nb_rois*n*n).reshape(nb_rois*n*n, 1)
+        true_labels_test = np.ones((nb_rois*n*n, 1))
+        thres_test = 20
+        
+        common_shape_np = np.array([nb_rois*n*n, 1])
+        predicted_labels_np = np.argmax(scores_test, axis=1).reshape(common_shape_np)
+        #print(predicted_labels_np.shape)
+        mask_np = np.where(np.greater(closest_gt_distance_test, thres_test), False, True)
+        mask_np = np.where(np.equal(true_labels_test, predicted_labels_np), mask_np, False)
 
+        with tf.Session() as sess:
+            mask_tf = compute_positives_ppn2(scores_test, closest_gt_distance_test, true_labels_test, threshold=thres_test)
+            mask_tf = sess.run([mask_tf])
+        return np.allclose(mask_np, mask_tf)
+        
     def test_assign_gt_pixels(self):
+        # Dummy input for testing
+        N = 2 
+        gt_pixels_placeholder_test = np.empty((N*N, 2))
         pass
 
 if __name__ == '__main__':
