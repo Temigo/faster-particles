@@ -8,7 +8,9 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from ppn import PPN
-from ppn_utils import generate_anchors, top_R_pixels, clip_pixels, compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels
+from ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
+    compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels, \
+    include_gt_pixels
 from toydata_generator import ToydataGenerator
 
 def generate_anchors_np(width, height, repeat=1):
@@ -136,7 +138,33 @@ class Test(unittest.TestCase):
 
 
     def test_include_gt_pixels(self):
-        pass
+        # [None, 2] in F5 coordinates
+        rois_np = np.array([[0, 3], [15, 2], [3, 4], [5.6, 9.1]])
+        # [None, 2]
+        gt_pixels_np = np.array([[2.4, 2.3], [3, 4], [6.4, 1.2]])
+
+        # convert to F3 coordinates
+        gt_pixels_coord = np.floor(gt_pixels_np / 8.0)
+        # Get 3x3 pixels around this in F3
+        gt_pixels_coord = gt_pixels_coord[:, np.newaxis, :]
+        gt_pixels_coord = np.tile(gt_pixels_coord, [1, 9, 1]) # shape N x 9 x 2
+        update = np.array([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]])
+        update = np.tile(update[np.newaxis, :, :], [gt_pixels_coord.shape[0], 1, 1])
+        gt_pixels_coord = gt_pixels_coord + update
+        gt_pixels_coord = np.reshape(gt_pixels_coord, (-1, 2)) # Shape N*9, 2
+        # FIXME Clip it to F3 size
+        # indices = tf.where(tf.less(gt_pixels_coord, 64))
+        # gt_pixels_coord = tf.gather_nd(gt_pixels_coord, indices)
+        # Go back to F5 coordinates
+        gt_pixels_coord = gt_pixels_coord / 4.0 # FIXME hardcoded
+        rois_result_np = np.vstack([np.floor(rois_np), gt_pixels_coord]) # shape [None, 2]
+
+        with tf.Session() as sess:
+            rois_tf = tf.constant(rois_np, dtype=tf.float32)
+            gt_pixels_tf = tf.constant(gt_pixels_np, dtype=tf.float32)
+            rois_tf = include_gt_pixels(rois_tf, gt_pixels_tf)
+            rois_result_tf = sess.run(rois_tf)
+            return np.allclose(rois_result_tf, rois_result_np)
 
     def test_compute_positives_ppn1(self):
         # Dummy input for testing, num of gt pixels = N = 3
