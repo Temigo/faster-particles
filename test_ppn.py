@@ -31,24 +31,18 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, R=20, classes=False):
     """
     with tf.variable_scope("predicted_pixels"):
         # Select pixels that contain something
-        if classes:
-            #scores = rpn_cls_prob[:, :, :, 2:]
-            scores = tf.reshape(rpn_cls_prob, (-1, rpn_cls_prob.get_shape().as_list()[-1]))
-        else:
-            scores = rpn_cls_prob[:, :, :, 1:] # FIXME
-            # Reshape to a list in the order of anchors
-            # rpn_bbox_pred = tf.reshape(rpn_bbox_pred, (-1, 2))
-            scores = tf.reshape(scores, (-1, 1))
+        scores = rpn_cls_prob[:, :, :, 1:]
+        scores = tf.reshape(scores, (-1, rpn_cls_prob.get_shape().as_list()[-1]-1)) # has shape (None, N, N, num_classes - 1)
 
         # Get proposal pixels from regression deltas of rpn_bbox_pred
         #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
-        anchors = tf.reshape(anchors, shape=(-1, rpn_cls_prob.get_shape().as_list()[1], rpn_cls_prob.get_shape().as_list()[1], 2))
-        proposals =  anchors + rpn_bbox_pred
+        anchors = tf.reshape(anchors, shape=(-1, rpn_cls_prob.get_shape().as_list()[1], rpn_cls_prob.get_shape().as_list()[2], 2))
+        proposals = anchors + rpn_bbox_pred
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
         proposals = clip_pixels(proposals)
-        rois = tf.cast(proposals, tf.float32)
-        return rois, scores
+        proposals = tf.cast(proposals, tf.float32)
+        return proposals, scores
 
 class Test(unittest.TestCase):
     #self.toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
@@ -121,6 +115,7 @@ class Test(unittest.TestCase):
 
         anchors_np = generate_anchors_np(width=width, height=height, repeat=repeat)
         roi_scores_np = scores = np.reshape(rpn_cls_prob_np, (-1, rpn_cls_prob_np.shape[-1]))
+
         anchors_np = np.reshape(anchors_np, (-1, rpn_cls_prob_np.shape[1], rpn_cls_prob_np.shape[1], 2))
         proposals =  anchors_np + rpn_bbox_pred_np
         proposals = np.reshape(proposals, (-1, 2))
@@ -135,7 +130,6 @@ class Test(unittest.TestCase):
             rois, roi_scores = predicted_pixels(rpn_cls_prob_tf, rpn_bbox_pred_tf, anchors_tf, R=R, classes=True)
             rois_tf, roi_scores_tf = sess.run([rois, roi_scores])
             return np.allclose(rois_tf, rois_np) and np.allclose(roi_scores_tf, roi_scores_np)
-
 
     def test_include_gt_pixels(self):
         # [None, 2] in F5 coordinates
@@ -168,7 +162,7 @@ class Test(unittest.TestCase):
 
     def test_compute_positives_ppn1(self):
         # Dummy input for testing, num of gt pixels = N = 3
-        gt_pixels_test = np.array([[5.5, 7.7],[511.1, 433.3], [320, 320]])
+        gt_pixels_test = np.array([[5.5, 7.7], [511.1, 433.3], [320, 320]])
         #print(gt_pixels_test.shape) #should be shape (3,2)
 
         classes_np = np.zeros((16,16))
@@ -185,10 +179,10 @@ class Test(unittest.TestCase):
     def test_compute_positives_ppn2(self):
         # Need to comment out assert statement in compute_positives_ppn2
         # Dummy input for testing
-        nb_rois, n, n_classes = 2, 3, 4
-        scores_test = np.stack([np.array([0, 1, 0, 0]) for i in range(nb_rois*n*n)])
-        closest_gt_distance_test = np.arange(nb_rois*n*n).reshape(nb_rois*n*n, 1)
-        true_labels_test = np.ones((nb_rois*n*n, 1))
+        nb_rois, N, n_classes = 2, 3, 4
+        scores_test = np.stack([np.array([0, 1, 0, 0]) for i in range(nb_rois*N*N)])
+        closest_gt_distance_test = np.arange(nb_rois*N*N).reshape(nb_rois*N*N, 1)
+        true_labels_test = np.ones((nb_rois*N*N, 1))
         thres_test = 20
 
         common_shape_np = np.array([nb_rois*n*n, 1])
@@ -204,9 +198,26 @@ class Test(unittest.TestCase):
 
     def test_assign_gt_pixels(self):
         # Dummy input for testing
-        N = 2
+        N = 2 
+        nb_rois = 5
         gt_pixels_placeholder_test = np.empty((N*N, 2))
-        pass
+        proposals_test = np.ones((nb_rois*N*N, 2))
+        #rois_test = np.ones((nb_rois, 2))
+        rois_test = None
+        
+        gt_pixels_np = gt_pixels_placeholder_test[:,:-1] # shape (N*N, 1)
+        gt_pixels_np = gt_pixels_np[np.newaxis, :] # shape (1, N*N, 1)
+        print(gt_pixels_np.shape)
+        if rois_test is None:
+            gt_pixels_np /= 32.0
+            all_gt_pixels_np = np.tile(gt_pixels_np, [proposals_test.shape[0], 1, 1]) # shape (nb_rois*N*N, N*N, 1)
+            print(all_gt_pixels_np.shape)
+        #else:
+        #    gt_pixels_np = gt_pixels_np[np.newaxis, :]
+        #    gt_pixels_np = np.tile(gt_pixels_np, [nb_rois*N*N, nb_rois, 1, 1])
+        #    broadcast_rois_np = np.expand_dims(np.expand_dims(rois, axis=1), axis=1)
+        #    braodcast_rois_np = np.tile(broadcast_rois, [1, 
+                
 
 if __name__ == '__main__':
     unittest.main()
