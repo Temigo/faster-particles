@@ -21,7 +21,7 @@ class PPN(object):
         # Global parameters
         self.R = R
         self.is_training = is_training
-        self.num_classes = num_classes # background, track edge, shower start
+        self.num_classes = num_classes # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = N
         self.ppn1_score_threshold = 0.5
         self.ppn2_distance_threshold = 2
@@ -221,7 +221,7 @@ class PPN(object):
 
             # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
             # and anchors. Take the first R proposed pixels which contain an object.
-            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors)
+            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (16, 16)) # FIXME hardcoded
             rois, roi_scores = top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
             assert proposals.get_shape().as_list() == [256, 2]
             assert scores.get_shape().as_list() == [256, 1]
@@ -254,13 +254,13 @@ class PPN(object):
 
                 # Step 4) compute loss for PPN1
                 # First is point loss: for positive pixels, distance from proposed pixel to closest ground truth pixel
-                # FIXME reduce_mean or reduce_sum? Same for loss_ppn1_class
-                loss_ppn1_point = tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask))
+                # FIXME Use smooth L1 for distance loss?
+                loss_ppn1_point = tf.reduce_mean(tf.reduce_sum(tf.boolean_mask(closest_gt_distance, classes_mask)))
                 # Use softmax_cross_entropy instead of sigmoid here
                 #loss_ppn1_class = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(classes_mask, tf.float32), logits=scores))
                 labels_ppn1 = tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32)
-                loss_ppn1_class = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn1,
-                                                                                                logits=tf.reshape(ppn1_cls_score, (-1, 2))))
+                loss_ppn1_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn1,
+                                                                                                logits=tf.reshape(ppn1_cls_score, (-1, 2)))))
                 #accuracy_ppn1 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(ppn1_cls_prob, axis=1), tf.int32), labels_ppn1), tf.float32))
 
                 self._predictions['ppn1_positives'] = classes_mask
@@ -317,7 +317,7 @@ class PPN(object):
             # Derive proposed points from delta predictions (rpn_bbox_pred2) w.r.t. pixels centers
             # Coordinates of proposals2 are in 1x1 ROI area
             # We have 1*1*num_roi proposals and corresponding scores
-            proposals2, scores2 = predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, classes=True)
+            proposals2, scores2 = predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, (1, 1), classes=True)
             assert proposals2.get_shape().as_list() == [None, 2]
             assert scores2.get_shape().as_list() == [None, self.num_classes]
 
@@ -344,11 +344,11 @@ class PPN(object):
                 # Step 4) Loss
                 # first is based on an absolute distance to the closest
                 # ground-truth point where only positives count
-                loss_ppn2_point = tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives))
+                loss_ppn2_point = tf.reduce_mean(tf.reduce_sum(tf.boolean_mask(closest_gt_distance, positives)))
                 # second is a softmax class loss from both positives and negatives
                 # for positives, the true label is defined by the closest point’s label
-                loss_ppn2_class = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels, (-1,)), tf.int32),
-                                                                                 logits=tf.reshape(ppn2_cls_score, (-1, self.num_classes))))
+                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels, (-1,)), tf.int32),
+                                                                                 logits=tf.reshape(ppn2_cls_score, (-1, self.num_classes)))))
 
                 self._predictions['ppn2_positives'] = positives
                 self._losses['loss_ppn2_point'] = loss_ppn2_point
