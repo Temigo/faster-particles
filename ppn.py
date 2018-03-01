@@ -44,6 +44,11 @@ class PPN(object):
             ], feed_dict=feed_dict)
         return im_proposals, im_labels, im_scores, ppn1_proposals, rois, ppn2_proposals
 
+    def get_summary(self, sess, blobs):
+        feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
+        summary = sess.run(self.summary_op, feed_dict=feed_dict)
+        return summary
+
     # FIXME train_op argument useless?
     def train_step(self, sess, blobs, train_op):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
@@ -70,11 +75,11 @@ class PPN(object):
         #print("ppn1_pixel_pred : ", ppn1_pixel_pred.shape, ppn1_pixel_pred[0][0])
         #print("ppn1_cls_prob : ", ppn1_cls_prob.shape, ppn1_cls_prob[0][0])
         #print("ppn1_anchors : ", ppn1_anchors.shape, ppn1_anchors[0:10])
-        print("ppn1_proposals : ", ppn1_proposals.shape, ppn1_proposals[0:10])
-        print("ppn1_scores : ", ppn1_scores.shape, ppn1_scores[0:10])
+        #print("ppn1_proposals : ", ppn1_proposals.shape, ppn1_proposals[0:10])
+        #print("ppn1_scores : ", ppn1_scores.shape, ppn1_scores[0:10])
         #print("labels ppn1 : ", labels_ppn1.shape, labels_ppn1)
-        print("ppn1 rois: ", rois.shape, rois[0:10])
-        print("ppn2_proposals : ", ppn2_proposals.shape, ppn2_proposals[0:10])
+        #print("ppn1 rois: ", rois.shape, rois[0:10])
+        #print("ppn2_proposals : ", ppn2_proposals.shape, ppn2_proposals[0:10])
 
         return summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives
 
@@ -113,7 +118,7 @@ class PPN(object):
 
             # Pool to Pixels of Interest of intermediate layer
             # FIXME How do we want to do the ROI pooling?
-            # Shape of rpn_pooling = nb_rois, 1, 1, 256 (number of feature maps in F3)
+            # Shape of rpn_pooling = nb_rois, 4, 4, 256
             rpn_pooling = self.crop_pool_layer_2d(net, rois)
             assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
@@ -136,19 +141,19 @@ class PPN(object):
                 optimizer = tf.train.AdamOptimizer(self.lr)
                 self.train_op = optimizer.minimize(total_loss)
 
-            else: # Testing time
-                # Turn predicted positions (float) into original image positions
-                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
-                # then back to original image.
-                # FIXME take top scores only? or leave it to the demo script
-                im_proposals = (proposals2 + 4*rois)*8.0
-                im_labels = tf.argmax(scores2, axis=1)
-                im_scores = tf.gather(scores2, im_labels)
-                self._predictions['im_proposals'] = im_proposals
-                self._predictions['im_labels'] = im_labels
-                self._predictions['im_scores'] = im_scores
-                # We have now num_roi proposals and corresponding labels in original image.
-                # Pixel NMS equivalent ?
+            # Testing time
+            # Turn predicted positions (float) into original image positions
+            # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
+            # then back to original image.
+            # FIXME take top scores only? or leave it to the demo script
+            im_proposals = (proposals2 + 4*rois)*8.0
+            im_labels = tf.argmax(scores2, axis=1)
+            im_scores = tf.gather(scores2, im_labels)
+            self._predictions['im_proposals'] = im_proposals
+            self._predictions['im_labels'] = im_labels
+            self._predictions['im_scores'] = im_scores
+            # We have now num_roi proposals and corresponding labels in original image.
+            # Pixel NMS equivalent ?
 
     def build_vgg(self):
         # =====================================================
@@ -319,7 +324,7 @@ class PPN(object):
             # We have 1*1*num_roi proposals and corresponding scores
             proposals2, scores2 = predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, (1, 1), classes=True)
             assert proposals2.get_shape().as_list() == [None, 2]
-            assert scores2.get_shape().as_list() == [None, self.num_classes]
+            assert scores2.get_shape().as_list() == [None, self.num_classes-1]
 
             self._predictions['ppn2_pixel_pred'] = ppn2_pixel_pred
             self._predictions['ppn2_cls_score'] = ppn2_cls_score

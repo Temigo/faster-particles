@@ -20,8 +20,8 @@ logdir = "log/run%d" % int(sys.argv[1])
 outputdir = "output/run%d" % int(sys.argv[1])
 MAX_STEPS = int(sys.argv[2])
 # Define data generators
-train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, dtheta=-1, max_track_length=200)
-test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, dtheta=-1, max_track_length=200)
+train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
+test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 
 net = PPN()
 net.create_architecture()
@@ -35,17 +35,18 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for step in range(MAX_STEPS):
         is_testing = step%10 == 5
-        is_drawing = step%10 == 0
+        is_drawing = step%100 == 0
         if is_testing:
             blob = test_toydata.forward()
         else:
             blob = train_toydata.forward()
 
-        print("Step %d" % step)
-        print(blob['gt_pixels'])
+        if step%100 == 0:
+            print("Step %d" % step)
+        #print(blob['gt_pixels'])
 
         if is_testing:
-            net.test_image(sess, blob)
+            summary = net.get_summary(sess, blob)
         else:
             summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = net.train_step_with_summary(sess, blob, None)
             if is_drawing:

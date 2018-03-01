@@ -86,7 +86,7 @@ def generate_toy_tracks(N, max_tracks, max_track_length=None, filename='', out_f
             theta = np.random.uniform(high=2.0*np.pi)
             start = end
             end = (np.clip(start[0] + int(length * np.cos(theta)), 0, 127), np.clip(start[1] + int(length * np.sin(theta)), 0, 127))
-            print(i_track, i_kink, start, end)
+            #print(i_track, i_kink, start, end)
             start_points.append(start)
             end_points.append(end)
             draw_line(output, start, end)
