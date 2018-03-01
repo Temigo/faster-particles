@@ -113,7 +113,7 @@ class PPN(object):
 
             # Pool to Pixels of Interest of intermediate layer
             # FIXME How do we want to do the ROI pooling?
-            # Shape of rpn_pooling = nb_rois, 4, 4, 256
+            # Shape of rpn_pooling = nb_rois, 1, 1, 256 (number of feature maps in F3)
             rpn_pooling = self.crop_pool_layer_2d(net, rois)
             assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
