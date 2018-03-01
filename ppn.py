@@ -17,10 +17,9 @@ from ppn_utils import include_gt_pixels, compute_positives_ppn2, \
 
 class PPN(object):
 
-    def __init__(self, R=20, num_classes=3, N=512, is_training=True):
+    def __init__(self, R=20, num_classes=3, N=512):
         # Global parameters
         self.R = R
-        self.is_training = is_training
         self.num_classes = num_classes # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = N
         self.ppn1_score_threshold = 0.5
@@ -83,7 +82,8 @@ class PPN(object):
     # def get_summary(self, sess, blobs_val)
     # def fix_variables(self, sess, self.pretrained_model)
 
-    def create_architecture(self):
+    def create_architecture(self, is_training=True):
+        self.is_training = is_training
         # Define placeholders
         # FIXME Assuming batch size of 1 currently
         self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)

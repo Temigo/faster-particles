@@ -89,8 +89,8 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None, rois
 def inference():
     toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 
-    net = PPN(is_training=False)
-    net.create_architecture()
+    net = PPN()
+    net.create_architecture(is_training=False)
     saver = tf.train.Saver()
 
     with tf.Session() as sess:
