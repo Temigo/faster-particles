@@ -65,18 +65,12 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
     """
     with tf.variable_scope("predicted_pixels"):
         # Select pixels that contain something
-        if classes:
-            #scores = rpn_cls_prob[:, :, :, 2:]
-            scores = tf.reshape(rpn_cls_prob, (-1, rpn_cls_prob.get_shape().as_list()[-1]))
-        else:
-            scores = rpn_cls_prob[:, :, :, 1:] # FIXME
-            # Reshape to a list in the order of anchors
-            # rpn_bbox_pred = tf.reshape(rpn_bbox_pred, (-1, 2))
-            scores = tf.reshape(scores, (-1, 1))
+        scores = rpn_cls_prob[:, :, :, 1:]
+        scores = tf.reshape(scores, (-1, rpn_cls_prob.get_shape().as_list()[-1]-1)) # has shape (None, N, N, num_classes - 1)
 
         # Get proposal pixels from regression deltas of rpn_bbox_pred
         #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
-        anchors = tf.reshape(anchors, shape=(-1, rpn_cls_prob.get_shape().as_list()[1], rpn_cls_prob.get_shape().as_list()[1], 2))
+        anchors = tf.reshape(anchors, shape=(-1, rpn_cls_prob.get_shape().as_list()[1], rpn_cls_prob.get_shape().as_list()[2], 2))
         proposals =  anchors + rpn_bbox_pred
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
