@@ -20,8 +20,8 @@ logdir = "log/run%d" % int(sys.argv[1])
 outputdir = "output/run%d" % int(sys.argv[1])
 MAX_STEPS = int(sys.argv[2])
 # Define data generators
-train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
+train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, dtheta=-1, max_track_length=200)
+test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, dtheta=-1, max_track_length=200)
 
 net = PPN()
 net.create_architecture()

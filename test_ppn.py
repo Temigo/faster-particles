@@ -179,7 +179,7 @@ class Test(unittest.TestCase):
         true_labels_test = np.ones((nb_rois*N*N, 1))
         thres_test = 20
 
-        common_shape_np = np.array([nb_rois*n*n, 1])
+        common_shape_np = np.array([nb_rois*N*N, 1])
         predicted_labels_np = np.argmax(scores_test, axis=1).reshape(common_shape_np)
         #print(predicted_labels_np.shape)
         mask_np = np.where(np.greater(closest_gt_distance_test, thres_test), False, True)

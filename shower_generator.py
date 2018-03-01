@@ -19,7 +19,7 @@ def make_shower(args):
     # randomly generate nlines endpoints such that the lines fall
     # within around dtheta of theta0
     if args['dtheta'] < 0:
-        dtheta = np.random.uniform(0.5*np.pi)
+        dtheta = np.random.uniform(0.25*np.pi)
         thetas = np.random.normal(loc=theta0, scale=dtheta, size=(args['nlines'], 1))
     else:
         dtheta = args['dtheta']
