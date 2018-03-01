@@ -10,7 +10,7 @@ import tensorflow as tf
 from ppn import PPN
 from ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
     compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels, \
-    include_gt_pixels
+    include_gt_pixels, predicted_pixels
 from toydata_generator import ToydataGenerator
 
 def generate_anchors_np(width, height, repeat=1):
@@ -19,36 +19,14 @@ def generate_anchors_np(width, height, repeat=1):
     anchors_np = np.reshape(anchors_np, (-1, 2))
     return anchors_np
 
-def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, R=20, classes=False):
+def clip_pixels_np(pixels, im_shape):
     """
-    rpn_cls_prob.shape = [None, N, N, n] where n = 2 (background/signal) or num_classes
-    rpn_bbox_pred.shape = [None, N, N, 2]
-    anchors.shape = [N*N, 2]
-    Derive predicted pixels from predicted parameters (rpn_bbox_pred) with respect
-    to the anchors (= centers of the pixels of the feature map).
-    Return a list of predicted pixels and corresponding scores
-    of shape [N*N, 2] and [N*N, n]
+    pixels shape: [None, 2]
+    Clip pixels (x, y) to [0, im_shape[0]) x [0, im_shape[1])
     """
-    with tf.variable_scope("predicted_pixels"):
-        # Select pixels that contain something
-        if classes:
-            #scores = rpn_cls_prob[:, :, :, 2:]
-            scores = tf.reshape(rpn_cls_prob, (-1, rpn_cls_prob.get_shape().as_list()[-1]))
-        else:
-            scores = rpn_cls_prob[:, :, :, 1:] # FIXME
-            # Reshape to a list in the order of anchors
-            # rpn_bbox_pred = tf.reshape(rpn_bbox_pred, (-1, 2))
-            scores = tf.reshape(scores, (-1, 1))
-
-        # Get proposal pixels from regression deltas of rpn_bbox_pred
-        #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
-        anchors = tf.reshape(anchors, shape=(-1, rpn_cls_prob.get_shape().as_list()[1], rpn_cls_prob.get_shape().as_list()[1], 2))
-        proposals =  anchors + rpn_bbox_pred
-        proposals = tf.reshape(proposals, (-1, 2))
-        # clip predicted pixels to the image
-        proposals = clip_pixels(proposals)
-        rois = tf.cast(proposals, tf.float32)
-        return rois, scores
+    pixels[:, 0] = np.clip(pixels[:, 0], 0, im_shape[0])
+    pixels[:, 1] = np.clip(pixels[:, 1], 0, im_shape[1])
+    return pixels
 
 class Test(unittest.TestCase):
     #self.toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
@@ -60,6 +38,16 @@ class Test(unittest.TestCase):
         with tf.Session() as sess:
             anchors_tf = generate_anchors(width=width, height=height, repeat=repeat)
             return np.array_equal(anchors_tf, anchors_np)
+
+    def test_clip_pixels(self):
+        im_shape = (3, 3)
+        proposals_np = np.array([[-0.5, 1.0], [0.01, 3.4], [2.5, 2.99]])
+        pixels_np = clip_pixels_np(proposals_np, im_shape)
+        with tf.Session() as sess:
+            proposals = tf.constant(proposals_np, dtype=tf.float32)
+            pixels = clip_pixels(proposals, im_shape)
+            pixels_tf = sess.run(pixels)
+            return np.allclose(pixels_np, pixels_tf)
 
     def test_top_R_pixels(self):
         R = 3
@@ -98,14 +86,14 @@ class Test(unittest.TestCase):
         proposals =  anchors_np + rpn_bbox_pred_np
         proposals = np.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
-        proposals = clip_pixels(proposals) # FIXME np function
+        proposals = clip_pixels_np(proposals, (width, height)) # FIXME np function
         rois_np = proposals.astype(float)
 
         with tf.Session() as sess:
             anchors_tf = generate_anchors(width=width, height=height, repeat=repeat)
             rpn_cls_prob_tf = tf.constant(rpn_cls_prob_np, dtype=tf.float32)
             rpn_bbox_pred_tf = tf.constant(rpn_bbox_pred_np, dtype=tf.float32)
-            rois, roi_scores = predicted_pixels(rpn_cls_prob_tf, rpn_bbox_pred_tf, anchors_tf, R=R, classes=False)
+            rois, roi_scores = predicted_pixels(rpn_cls_prob_tf, rpn_bbox_pred_tf, anchors_tf, (width, height), R=R, classes=False)
             rois_tf, roi_scores_tf = sess.run([rois, roi_scores])
             return np.allclose(rois_tf, rois_np) and np.allclose(roi_scores_tf, roi_scores_np)
 
@@ -125,14 +113,14 @@ class Test(unittest.TestCase):
         proposals =  anchors_np + rpn_bbox_pred_np
         proposals = np.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
-        proposals = clip_pixels(proposals) # FIXME np function
+        proposals = clip_pixels_np(proposals, (width, height)) # FIXME np function
         rois_np = proposals.astype(float)
 
         with tf.Session() as sess:
             anchors_tf = generate_anchors(width=width, height=height, repeat=repeat)
             rpn_cls_prob_tf = tf.constant(rpn_cls_prob_np, dtype=tf.float32)
             rpn_bbox_pred_tf = tf.constant(rpn_bbox_pred_np, dtype=tf.float32)
-            rois, roi_scores = predicted_pixels(rpn_cls_prob_tf, rpn_bbox_pred_tf, anchors_tf, R=R, classes=True)
+            rois, roi_scores = predicted_pixels(rpn_cls_prob_tf, rpn_bbox_pred_tf, anchors_tf, (width, height), R=R, classes=True)
             rois_tf, roi_scores_tf = sess.run([rois, roi_scores])
             return np.allclose(rois_tf, rois_np) and np.allclose(roi_scores_tf, roi_scores_np)
 

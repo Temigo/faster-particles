@@ -14,18 +14,20 @@ def generate_anchors(width, height, repeat=1):
     anchors = tf.reshape(tf.constant(anchors, dtype=tf.float32), (-1, 2))
     return tf.tile(anchors, tf.stack([repeat, 1]))
 
-def clip_pixels(pixels):
-    # TODO Clip pixels to image boundaries
-    #pixels[:, 0::2] = tf.maximum(tf.minimum(pixels[:, 0::2], tf.cast(im_shape[1] - 1, tf.float32)), 0.)
-    #pixels[:, 1::2] = np.maximum(np.minimum(pixels[:, 1::2], im_shape[0] - 1), 0.)
-    #pixels[:, 0::2] = np.maximum(np.minimum(pixels[:, 0::2], im_shape[1] - 1), 0.)
-    #pixels[:, 1::2] = np.maximum(np.minimum(boxes[:, 1::2], im_shape[0] - 1), 0.)
+def clip_pixels(pixels, im_shape):
+    """
+    pixels shape: [None, 2]
+    Clip pixels (x, y) to [0, im_shape[0]) x [0, im_shape[1])
+    """
+    pixels_x = tf.slice(pixels, [0, 0], [-1, 1])
+    pixels_y = tf.slice(pixels, [0, 1], [-1, 1])
+    pixels_x = tf.clip_by_value(pixels_x, 0, im_shape[0])
+    pixels_y = tf.clip_by_value(pixels_y, 0, im_shape[1])
+    pixels = tf.concat([pixels_x, pixels_y], axis=1)
     return pixels
 
 def pixels_transform_inv(pixels, deltas):
     # Given an anchor pixel and regression deltas, estimate proposal pixel
-    print("pixels shape=", pixels.shape)
-    print("deltas shape=", deltas.shape)
     pred_pixels = pixels + deltas
     return pred_pixels
 
@@ -50,11 +52,12 @@ def top_R_pixels(proposals, scores, R=20, threshold=0.5):
         assert proposals.get_shape().as_list() == [None, 2]
         return proposals, scores
 
-def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, R=20, classes=False):
+def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, classes=False):
     """
     rpn_cls_prob.shape = [None, N, N, n] where n = 2 (background/signal) or num_classes
     rpn_bbox_pred.shape = [None, N, N, 2]
     anchors.shape = [N*N, 2]
+    im_shape = (width, height) to clip coordinates of proposals
     Derive predicted pixels from predicted parameters (rpn_bbox_pred) with respect
     to the anchors (= centers of the pixels of the feature map).
     Return a list of predicted pixels and corresponding scores
@@ -77,7 +80,7 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, R=20, classes=False):
         proposals =  anchors + rpn_bbox_pred
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
-        proposals = clip_pixels(proposals)
+        proposals = clip_pixels(proposals, im_shape)
         rois = tf.cast(proposals, tf.float32)
         return rois, scores
 
