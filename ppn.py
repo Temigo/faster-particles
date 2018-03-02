@@ -58,7 +58,9 @@ class PPN(object):
     def train_step_with_summary(self, sess, blobs, train_op):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
-        ppn1_scores, labels_ppn1, rois, ppn2_proposals, ppn2_positives, summary = sess.run([
+        ppn1_scores, labels_ppn1, rois, ppn2_proposals, ppn2_positives, \
+        ppn2_scores, ppn2_closest_gt_distance, ppn2_true_labels, ppn2_cls_score, \
+        summary = sess.run([
                             self.train_op,
                             self._predictions['ppn1_pixel_pred'],
                             self._predictions['ppn1_cls_prob'],
@@ -69,6 +71,10 @@ class PPN(object):
                             self._predictions['rois'],
                             self._predictions['ppn2_proposals'],
                             self._predictions['ppn2_positives'],
+                            self._predictions['ppn2_scores'],
+                            self._predictions['ppn2_closest_gt_distance'],
+                            self._predictions['ppn2_true_labels'],
+                            self._predictions['ppn2_cls_score'],
                             self.summary_op
                             ], feed_dict=feed_dict)
 
@@ -79,7 +85,12 @@ class PPN(object):
         #print("ppn1_scores : ", ppn1_scores.shape, ppn1_scores[0:10])
         #print("labels ppn1 : ", labels_ppn1.shape, labels_ppn1)
         #print("ppn1 rois: ", rois.shape, rois[0:10])
-        #print("ppn2_proposals : ", ppn2_proposals.shape, ppn2_proposals[0:10])
+        print("ppn2_proposals : ", ppn2_proposals.shape, ppn2_proposals[0:10])
+        print("ppn2_positives: ", ppn2_positives.shape, ppn2_positives[0:10])
+        print("ppn2_scores: ", ppn2_scores.shape, ppn2_scores[0:10])
+        print("ppn2_closest_gt_distance: ", ppn2_closest_gt_distance.shape, ppn2_closest_gt_distance[0:10])
+        print("ppn2_true_labels: ", ppn2_true_labels.shape, ppn2_true_labels[0:10])
+        print("ppn2_cls_scores: ", ppn2_cls_score.shape, ppn2_cls_score[0:10])
 
         return summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives
 
@@ -336,7 +347,7 @@ class PPN(object):
             if self.is_training:
                 # Find closest ground truth pixel and its label
                 # Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
-                closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois)
+                closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois, scores=ppn2_cls_score)
                 assert closest_gt.get_shape().as_list() == [None]
                 assert closest_gt_distance.get_shape().as_list() == [None, 1]
                 assert true_labels.get_shape().as_list() == [None, 1]
@@ -358,6 +369,8 @@ class PPN(object):
                 self._predictions['ppn2_positives'] = positives
                 self._losses['loss_ppn2_point'] = loss_ppn2_point
                 self._losses['loss_ppn2_class'] = loss_ppn2_class
+                self._predictions['ppn2_true_labels'] = true_labels
+                self._predictions['ppn2_closest_gt_distance'] = closest_gt_distance
 
             return proposals2, scores2
             # --- END of Pixel Proposal Network 2 ---

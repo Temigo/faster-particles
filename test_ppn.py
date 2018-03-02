@@ -107,8 +107,9 @@ class Test(unittest.TestCase):
         # Shape [None, N, N, 2]
         rpn_bbox_pred_np = np.array([[[[0.1, 0.1], [0.5, 0.2]], [[0.9, -0.5], [0.1, -0.4]]]])
 
+        rpn_cls_prob_np = rpn_cls_prob_np[:,:,:,1:]
         anchors_np = generate_anchors_np(width=width, height=height, repeat=repeat)
-        roi_scores_np = scores = np.reshape(rpn_cls_prob_np, (-1, rpn_cls_prob_np.shape[-1]))
+        roi_scores_np = np.reshape(rpn_cls_prob_np, (-1, rpn_cls_prob_np.shape[-1]))
 
         anchors_np = np.reshape(anchors_np, (-1, rpn_cls_prob_np.shape[1], rpn_cls_prob_np.shape[1], 2))
         proposals =  anchors_np + rpn_bbox_pred_np
@@ -194,13 +195,14 @@ class Test(unittest.TestCase):
         # Dummy input for testing
         N = 2 
         nb_rois = 5
-        gt_pixels_placeholder_test = np.empty((N*N, 2))
+        nb_gt = 7
+        gt_pixels_placeholder_test = np.empty((nb_gt, 3))
         proposals_test = np.ones((nb_rois*N*N, 2))
         #rois_test = np.ones((nb_rois, 2))
         rois_test = None
         
-        gt_pixels_np = gt_pixels_placeholder_test[:,:-1] # shape (N*N, 1)
-        gt_pixels_np = gt_pixels_np[np.newaxis, :] # shape (1, N*N, 1)
+        gt_pixels_np = gt_pixels_placeholder_test[:,:-1] # shape (nb_gt, 2)
+        gt_pixels_np = gt_pixels_np[np.newaxis, :] # shape (1, nb_gt, 2)
         print(gt_pixels_np.shape)
         if rois_test is None:
             gt_pixels_np /= 32.0
@@ -211,7 +213,7 @@ class Test(unittest.TestCase):
         #    gt_pixels_np = np.tile(gt_pixels_np, [nb_rois*N*N, nb_rois, 1, 1])
         #    broadcast_rois_np = np.expand_dims(np.expand_dims(rois, axis=1), axis=1)
         #    braodcast_rois_np = np.tile(broadcast_rois, [1, 
-                
+        
 
 if __name__ == '__main__':
     unittest.main()

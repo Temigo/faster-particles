@@ -157,13 +157,14 @@ class ToydataGenerator(object):
         return blob
 
 if __name__ == '__main__':
-    t = ToydataGenerator(256, 3, 1, batch_size=20, classification=True)
+    t = ToydataGenerator(256, 3, 1, batch_size=20, classification=False)
     blobdict = t.forward()
     print(blobdict['gt_boxes'])
     print(blobdict['data'].shape)
     print(blobdict['class_labels'].shape)
+    print("gt pixels shape ", blobdict['gt_pixels'].shape)
 
-    b = t.fetch_batch()
-    print(b['data'].shape)
-    print(b['class_labels'].shape)
-    print(b['angles'].shape)
+    #b = t.fetch_batch()
+    #print(b['data'].shape)
+    #print(b['class_labels'].shape)
+    #print(b['angles'].shape)
