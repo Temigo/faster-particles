@@ -42,7 +42,7 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                         #hatch='\\',
                         facecolor='green',
                         alpha = 0.5,
-                        linewidth=2.0,
+                        linewidth=1.0,
                         edgecolor='red',
                     )
                 )
@@ -57,19 +57,19 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                     8, # height
                     #fill=False,
                     #hatch='\\',
-                    facecolor='green',
+                    facecolor='pink',
                     alpha = 0.3,
-                    linewidth=2.0,
+                    linewidth=1.0,
                     edgecolor='black',
                 )
             )
 
         for i in range(len(rois)):
             if ppn2_positives is None or ppn2_positives[i]:
-                plt.plot([ppn2_proposals[i][1]*8.0+rois[i][1]*32.0], [ppn2_proposals[i][0]*8.0+rois[i][0]*32.0], 'r+')
+                plt.plot([ppn2_proposals[i][1]*8.0+rois[i][1]*32.0], [ppn2_proposals[i][0]*8.0+rois[i][0]*32.0], 'b+')
                 coord = np.floor(ppn2_proposals[i])*8.0 + rois[i]*32.0
                 #print(floor(coord[1]), floor(coord[0]))
-                ax.add_patch(
+                """ax.add_patch(
                     patches.Rectangle(
                         (coord[1], coord[0]),
                         8, # width
@@ -77,11 +77,11 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                         #fill=False,
                         #hatch='\\',
                         facecolor='yellow',
-                        alpha = 0.8,
-                        linewidth=2.0,
+                        alpha = 0.5,
+                        linewidth=1.0,
                         edgecolor='pink',
                     )
-                )
+                )"""
 
     if im_proposals is not None:
         for i in range(len(im_proposals)):

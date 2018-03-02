@@ -14,7 +14,7 @@ from toydata_generator import ToydataGenerator
 from demo_ppn import display
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 logdir = "log/run%d" % int(sys.argv[1])
 outputdir = "output/run%d" % int(sys.argv[1])
@@ -51,7 +51,7 @@ for step in range(MAX_STEPS):
     else:
         summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = net.train_step_with_summary(sess, blob, None)
         if is_drawing:
-            display(blob, ppn1_proposals=ppn1_proposals, ppn1_labels=labels_ppn1, rois=rois, ppn2_proposals=ppn2_proposals, ppn2_positives=ppn2_positives, index=step, name='display_train')
+            display(blob, ppn1_labels=labels_ppn1, rois=rois, ppn2_proposals=ppn2_proposals, ppn2_positives=ppn2_positives, index=step, name='display_train')
     if is_testing:
         summary_writer_test.add_summary(summary, step)
     else:

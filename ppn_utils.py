@@ -74,7 +74,7 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
         proposals =  anchors + rpn_bbox_pred
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
-        proposals = clip_pixels(proposals, im_shape)
+        #proposals = clip_pixels(proposals, im_shape)
         rois = tf.cast(proposals, tf.float32)
         return rois, scores
 
@@ -86,14 +86,27 @@ def include_gt_pixels(rois, gt_pixels):
     gt_pixels: shape (None, 2)
     Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
     """
-    rois_x = tf.slice(rois, [0, 0], [-1, 1])
-    rois_y = tf.slice(rois, [0, 1], [-1, 1])
+    rois_x = tf.slice(rois, [0, 0], [-1, 1]) * 4.0
+    rois_y = tf.slice(rois, [0, 1], [-1, 1]) * 4.0
     rois = tf.concat([
         tf.concat([rois_x, rois_y], axis=1),
         tf.concat([rois_x, rois_y+1], axis=1),
+        tf.concat([rois_x, rois_y+2], axis=1),
+        tf.concat([rois_x, rois_y+3], axis=1),
         tf.concat([rois_x+1, rois_y], axis=1),
-        tf.concat([rois_x+1, rois_y+1], axis=1)
-     ], axis=0)
+        tf.concat([rois_x+1, rois_y+1], axis=1),
+        tf.concat([rois_x+1, rois_y+2], axis=1),
+        tf.concat([rois_x+1, rois_y+3], axis=1),
+        tf.concat([rois_x+2, rois_y], axis=1),
+        tf.concat([rois_x+2, rois_y+1], axis=1),
+        tf.concat([rois_x+2, rois_y+2], axis=1),
+        tf.concat([rois_x+2, rois_y+3], axis=1),
+        tf.concat([rois_x+3, rois_y], axis=1),
+        tf.concat([rois_x+3, rois_y+1], axis=1),
+        tf.concat([rois_x+3, rois_y+2], axis=1),
+        tf.concat([rois_x+3, rois_y+3], axis=1),
+    ], axis=0)
+    rois = rois / 4.0
 
     # convert to F3 coordinates
     gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 8.0), tf.float32) # FIXME hardcoded
@@ -113,7 +126,7 @@ def include_gt_pixels(rois, gt_pixels):
     # FIXME As soon as new version of Tensorflow supporting axis option
     # for tf.unique, replace the following rough patch.
     # In the meantime, we will have some duplicates between rois and gt_pixels.
-    rois = tf.concat([tf.floor(rois), gt_pixels_coord], axis=0) # shape [None, 2]
+    rois = tf.concat([rois, gt_pixels_coord], axis=0) # shape [None, 2]
     assert rois.get_shape().as_list()[-1] == 2 and len(rois.get_shape().as_list()) == 2 # Shape [None, 2]
     return rois
 
@@ -190,10 +203,11 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None, scores=None):
             # Reshape to [A*N*N, None, 2]
             all_gt_pixels = tf.reshape(all_gt_pixels, (tf.shape(proposals)[0], -1, 2))
             gt_pixels_labels = tf.tile(tf.expand_dims(tf.reshape(gt_pixels_placeholder[:, -1], (tf.shape(gt_pixels_placeholder)[0], 1)), axis=0), (tf.shape(scores)[0], 1, 1))
+            # Reshape scores to A*N*N, num_classes
             scores = tf.reshape(scores, (-1, tf.shape(scores)[-1]))
-            #print(tf.argmax(scores, axis=1).shape)
+            print(tf.expand_dims(tf.expand_dims(tf.argmax(scores, axis=1), axis=1), axis=2))
             scores_labels = tf.cast(tf.tile(tf.expand_dims(tf.expand_dims(tf.argmax(scores, axis=1), axis=1), axis=2), [1, tf.shape(gt_pixels_placeholder)[0], 1]), dtype=tf.float32)
-            all_gt_pixels_mask = tf.where(tf.equal(gt_pixels_labels, scores_labels), tf.fill(tf.shape(scores_labels), True), tf.fill(tf.shape(scores_labels), False))
+            all_gt_pixels_mask = tf.where(tf.equal(gt_pixels_labels, scores_labels), tf.fill(tf.shape(scores_labels), False), tf.fill(tf.shape(scores_labels), True))
             all_gt_pixels_mask = tf.squeeze(all_gt_pixels_mask, axis=2)
 
         assert all_gt_pixels.get_shape().as_list() == [None, None, 2]
