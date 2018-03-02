@@ -409,7 +409,7 @@ class PPN(object):
             #     ], axis=0)
             boxes = tf.concat([rois, rois+1], axis=1)
             # then to normalized coordinates in [0, 1] of F3 feature map
-            boxes = boxes / 16.0 # FIXME hardcoded
+            boxes = boxes / 64.0 # FIXME hardcoded
             assert boxes.get_shape().as_list() == [None, 4]
 
             # Shape of box_ind = [num_boxes] with values in [0, batch_size)
