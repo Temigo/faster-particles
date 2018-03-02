@@ -143,18 +143,21 @@ def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2
         assert predicted_labels.get_shape().as_list()[-1] == 1 and len(predicted_labels.get_shape().as_list()) == 2 # Shape [None, 1]
         true_labels = tf.cast(true_labels, tf.int32)
         mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, False), tf.fill(common_shape, True))
-        mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
+        #mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
         return mask
 
-def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None):
+def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None, scores=None):
     """
     Proposals shape: [A*N*N, 2] (N=16 or 64)
-    gt_pixels_placeholder is shape [None, 2, 1]
-    Classes shape: [A*N*N, 1]
+    gt_pixels_placeholder is shape [None, 2+1]
+    Scores shape: [A*N*N, n] where n = 2 or num_classes
     Rois shape: [A, 2] coordinates in F5 feature map (16x16)
     Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
     Returns closest ground truth pixels for all pixels and corresponding distance
     """
+    if rois is not None and scores is None:
+        raise Exception("Scores cannot be empty if ROIs is not empty")
+
     with tf.variable_scope("assign_gt_pixels"):
         gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0], [-1, 2])
         gt_pixels = tf.expand_dims(gt_pixels, axis=0)
@@ -162,6 +165,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None):
             # Tile to have shape (A*N*N, None, 2)
             gt_pixels = gt_pixels / 32.0 # Convert to F5 coordinates
             all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
+            all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
 
         else: # Translate each batch of N*N rows of all_gt_pixels w.r.t. corresponding ROI center
             # FIXME check that this yields expected result
@@ -176,6 +180,12 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None):
             all_gt_pixels = gt_pixels / 8.0 - 4.0 * broadcast_rois
             # Reshape to [A*N*N, None, 2]
             all_gt_pixels = tf.reshape(all_gt_pixels, (tf.shape(proposals)[0], -1, 2))
+            gt_pixels_labels = tf.tile(tf.expand_dims(tf.reshape(gt_pixels_placeholder[:, -1], (tf.shape(gt_pixels_placeholder)[0], 1)), axis=0), (tf.shape(scores)[0], 1, 1))
+            scores = tf.reshape(scores, (-1, tf.shape(scores)[-1]))
+            #print(tf.argmax(scores, axis=1).shape)
+            scores_labels = tf.cast(tf.tile(tf.expand_dims(tf.expand_dims(tf.argmax(scores, axis=1), axis=1), axis=2), [1, tf.shape(gt_pixels_placeholder)[0], 1]), dtype=tf.float32)
+            all_gt_pixels_mask = tf.where(tf.equal(gt_pixels_labels, scores_labels), tf.fill(tf.shape(scores_labels), True), tf.fill(tf.shape(scores_labels), False))
+            all_gt_pixels_mask = tf.squeeze(all_gt_pixels_mask, axis=2)
 
         assert all_gt_pixels.get_shape().as_list() == [None, None, 2]
         # Reshape proposals to [A*N*N, 1, 2]
@@ -184,6 +194,9 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None):
         # distances.shape = [A*N*N, None]
         # closest_gt.shape = [A*N*N,]
         # closest_gt[i] = indice of closest gt in gt_pixels_placeholder
+        if rois is not None:
+            distances = distances + tf.scatter_nd(tf.cast(tf.where(all_gt_pixels_mask), tf.int32), tf.fill((tf.shape(tf.where(all_gt_pixels_mask))[0],), 10000.0), tf.shape(all_gt_pixels_mask))
+
         closest_gt = tf.argmin(distances, axis=1)
         closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True)
         #print("squeezed gt_pixels_placeholder shape=", tf.squeeze(tf.slice(gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1).shape)
