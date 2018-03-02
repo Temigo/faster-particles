@@ -399,14 +399,6 @@ class PPN(object):
             # Shape of boxes = [num_boxes, 4]
             # boxes[i] is specified in normalized coordinates [y1, x1, y2, x2]
             # with y1 < y2 ideally
-            # rois_x = tf.slice(rois, [0, 0], [-1, 1])
-            # rois_y = tf.slice(rois, [0, 1], [-1, 1])
-            # rois = tf.concat([
-            #     tf.concat([rois_x, rois_y], axis=1),
-            #     tf.concat([rois_x, rois_y+1], axis=1),
-            #     tf.concat([rois_x+1, rois_y], axis=1),
-            #     tf.concat([rois_x+1, rois_y+1], axis=1)
-            #     ], axis=0)
             boxes = tf.concat([rois, rois+1], axis=1)
             # then to normalized coordinates in [0, 1] of F3 feature map
             boxes = boxes / 64.0 # FIXME hardcoded

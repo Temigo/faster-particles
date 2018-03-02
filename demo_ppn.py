@@ -36,8 +36,8 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                 ax.add_patch(
                     patches.Rectangle(
                         (coord[1], coord[0]),
-                        32, # width
-                        32, # height
+                        8, # width
+                        8, # height
                         #fill=False,
                         #hatch='\\',
                         facecolor='green',
@@ -53,8 +53,8 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
             ax.add_patch(
                 patches.Rectangle(
                     (roi[1]*32.0, roi[0]*32.0),
-                    32, # width
-                    32, # height
+                    8, # width
+                    8, # height
                     #fill=False,
                     #hatch='\\',
                     facecolor='green',

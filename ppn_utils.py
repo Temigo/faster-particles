@@ -86,6 +86,15 @@ def include_gt_pixels(rois, gt_pixels):
     gt_pixels: shape (None, 2)
     Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
     """
+    rois_x = tf.slice(rois, [0, 0], [-1, 1])
+    rois_y = tf.slice(rois, [0, 1], [-1, 1])
+    rois = tf.concat([
+        tf.concat([rois_x, rois_y], axis=1),
+        tf.concat([rois_x, rois_y+1], axis=1),
+        tf.concat([rois_x+1, rois_y], axis=1),
+        tf.concat([rois_x+1, rois_y+1], axis=1)
+     ], axis=0)
+
     # convert to F3 coordinates
     gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 8.0), tf.float32) # FIXME hardcoded
     # Get 3x3 pixels around this in F3
