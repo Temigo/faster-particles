@@ -59,7 +59,7 @@ class PPN(object):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
         ppn1_scores, labels_ppn1, rois, ppn2_anchors, ppn2_proposals, ppn2_positives, \
-        ppn2_scores, ppn2_closest_gt_distance, ppn2_true_labels, ppn2_cls_score, \
+        ppn2_scores, ppn2_closest_gt_distance, ppn2_true_labels, ppn2_true_labels_both, ppn2_cls_score, \
         loss_ppn2_point, summary = sess.run([
                             self.train_op,
                             self._predictions['ppn1_pixel_pred'],
@@ -75,6 +75,7 @@ class PPN(object):
                             self._predictions['ppn2_scores'],
                             self._predictions['ppn2_closest_gt_distance'],
                             self._predictions['ppn2_true_labels'],
+                            self._predictions['ppn2_true_labels_both'],
                             self._predictions['ppn2_cls_score'],
                             self._losses['loss_ppn2_point'],
                             self.summary_op
@@ -93,6 +94,8 @@ class PPN(object):
         print("ppn2_scores: ", ppn2_scores.shape, ppn2_scores[0:10])
         print("ppn2_closest_gt_distance: ", ppn2_closest_gt_distance.shape, ppn2_closest_gt_distance[0:10])
         print("ppn2_true_labels: ", ppn2_true_labels.shape, ppn2_true_labels[0:10])
+        print("ppn2_true_labels_both: ", ppn2_true_labels_both.shape, ppn2_true_labels_both[0:10])
+        print("difference=", np.sum(np.abs(ppn2_true_labels - ppn2_true_labels_both)))
         print("ppn2_cls_scores: ", ppn2_cls_score.shape, ppn2_cls_score[0:10])
         print("#positives: ", np.sum(ppn2_positives))
         loss_ppn2_point_np = np.mean(np.mean(ppn2_closest_gt_distance[ppn2_positives]))
@@ -159,8 +162,10 @@ class PPN(object):
                 tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
 
                 self.summary_op = tf.summary.merge_all()
-                optimizer = tf.train.AdamOptimizer(self.lr)
-                self.train_op = optimizer.minimize(total_loss)
+                global_step = tf.Variable(0, trainable=False)
+                lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
+                optimizer = tf.train.AdamOptimizer(lr)
+                self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 
             # Testing time
             # Turn predicted positions (float) into original image positions
@@ -372,14 +377,16 @@ class PPN(object):
                 # ground-truth point where only positives count
                 loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
                 # second is a softmax class loss from both positives and negatives
-                # for positives, the true label is defined by the closest point’s label
-                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels, (-1,)), tf.int32),
+                # the true label is defined by the closest ground truth point’s label
+                _, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
+                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels_both, (-1,)), tf.int32),
                                                                                  logits=tf.reshape(ppn2_cls_score, (-1, self.num_classes)))))
 
                 self._predictions['ppn2_positives'] = positives
                 self._losses['loss_ppn2_point'] = loss_ppn2_point
                 self._losses['loss_ppn2_class'] = loss_ppn2_class
                 self._predictions['ppn2_true_labels'] = true_labels
+                self._predictions['ppn2_true_labels_both'] = true_labels_both
                 self._predictions['ppn2_closest_gt_distance'] = closest_gt_distance
 
             return proposals2, scores2

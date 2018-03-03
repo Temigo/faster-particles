@@ -27,6 +27,11 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')
     ax.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
+    for gt_pixel in blob['gt_pixels']:
+        if gt_pixel[2] == 1:
+            plt.plot([gt_pixel[1]], [gt_pixel[0]], 'ro')
+        elif gt_pixel[2] == 2:
+            plt.plot([gt_pixel[1]], [gt_pixel[0]], 'go')
     if ppn1_proposals is not None:
         for i in range(len(ppn1_proposals)):
             if ppn1_labels is None or ppn1_labels[i] == 1:
@@ -83,13 +88,15 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                     )
                 )"""
 
-    if im_proposals is not None:
+    if im_proposals is not None and im_scores is not None:
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
+            print(im_labels[i])
+            plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
             if im_labels[i] == 0: # Track
                 plt.plot([proposal[1]], [proposal[0]], 'y+')
             elif im_labels[i] == 1: #Shower
-                plt.plot([proposal[1]], [proposal[0]], 'g+')
+                plt.plot([proposal[1]], [proposal[0]], 'y*')
             else:
                 raise Exception("Label unknown")
 
