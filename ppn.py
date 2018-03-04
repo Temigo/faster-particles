@@ -168,7 +168,7 @@ class PPN(object):
                     tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
                     tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
                     self.summary_op = tf.summary.merge_all()
-                    
+
                     global_step = tf.Variable(0, trainable=False)
                     lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
                     optimizer = tf.train.AdamOptimizer(lr)
@@ -293,7 +293,8 @@ class PPN(object):
                 # Step 4) compute loss for PPN1
                 # First is point loss: for positive pixels, distance from proposed pixel to closest ground truth pixel
                 # FIXME Use smooth L1 for distance loss?
-                loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask)))
+                #loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask)))
+                loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.exp(-1.0 * tf.boolean_mask(closest_gt_distance, classes_mask))))
                 # Use softmax_cross_entropy instead of sigmoid here
                 #loss_ppn1_class = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(classes_mask, tf.float32), logits=scores))
                 labels_ppn1 = tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32)
@@ -383,7 +384,8 @@ class PPN(object):
                 # Step 4) Loss
                 # first is based on an absolute distance to the closest
                 # ground-truth point where only positives count
-                loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
+                # loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
+                loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.exp(-1.0 * tf.boolean_mask(closest_gt_distance, positives))))
                 # second is a softmax class loss from both positives and negatives
                 # the true label is defined by the closest ground truth point’s label
                 #_, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
