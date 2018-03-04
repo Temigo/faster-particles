@@ -156,19 +156,21 @@ def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2
     scores shape = (A*N*N, num_classes)
     Return boolean mask for positives among proposals.
     Positives are those within certain distance range from the
-    closest ground-truth point of the same class
+    closest ground-truth point (of the same class? not for now)
     """
     with tf.variable_scope("ppn2_compute_positives"):
         pixel_count = tf.shape(true_labels)[0]
         common_shape = tf.stack([pixel_count, 1])
-        predicted_labels = tf.reshape(tf.argmax(scores, axis=1, output_type=tf.int32), common_shape)
-        assert predicted_labels.get_shape().as_list()[-1] == 1 and len(predicted_labels.get_shape().as_list()) == 2 # Shape [None, 1]
-        true_labels = tf.cast(true_labels, tf.int32)
-        mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, False), tf.fill(common_shape, True))
+        #predicted_labels = tf.reshape(tf.argmax(scores, axis=1, output_type=tf.int32), common_shape)
+        #assert predicted_labels.get_shape().as_list()[-1] == 1 and len(predicted_labels.get_shape().as_list()) == 2 # Shape [None, 1]
+        #true_labels = tf.cast(true_labels, tf.int32)
+        mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, 0), tf.fill(common_shape, 1))
+        mask = mask + tf.scatter_nd([tf.argmin(closest_gt_distance, output_type=tf.int32)], tf.constant([[1]]), common_shape)
+        mask = tf.cast(mask, tf.bool)
         #mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
         return mask
 
-def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None, scores=None):
+def assign_gt_pixels(gt_pixels_placeholder, proposals, ppn2=False, rois=None, scores=None):
     """
     Proposals shape: [A*N*N, 2] (N=16 or 64)
     gt_pixels_placeholder is shape [None, 2+1]
@@ -187,13 +189,16 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None, scores=None):
     with tf.variable_scope("assign_gt_pixels"):
         gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0], [-1, 2])
         gt_pixels = tf.expand_dims(gt_pixels, axis=0)
-        if rois is None:
+        if ppn2:
+            gt_pixels = gt_pixels / 8.0 # Convert to F3 coordinates
+        else:
             # Tile to have shape (A*N*N, None, 2)
             gt_pixels = gt_pixels / 32.0 # Convert to F5 coordinates
-            all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
-            all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
+        
+        all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
+        all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
 
-        else: # Translate each batch of N*N rows of all_gt_pixels w.r.t. corresponding ROI center
+        """else: # Translate each batch of N*N rows of all_gt_pixels w.r.t. corresponding ROI center
             # FIXME check that this yields expected result
             # Translation is gt_pixels / 8.0 - 4*rois[i] (with conversion to F3 coordinates)
             # Go to shape [1, 1, None, 2]
@@ -213,7 +218,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, rois=None, scores=None):
             scores_labels = tf.cast(tf.tile(tf.expand_dims(tf.expand_dims(tf.argmax(scores, axis=1), axis=1), axis=2), [1, tf.shape(gt_pixels_placeholder)[0], 1]), dtype=tf.float32)
             all_gt_pixels_mask = tf.where(tf.equal(gt_pixels_labels, scores_labels), tf.fill(tf.shape(scores_labels), False), tf.fill(tf.shape(scores_labels), True))
             all_gt_pixels_mask = tf.squeeze(all_gt_pixels_mask, axis=2)
-
+        """
         assert all_gt_pixels.get_shape().as_list() == [None, None, 2]
         # Reshape proposals to [A*N*N, 1, 2]
         proposals = tf.expand_dims(proposals, axis=1)

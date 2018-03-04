@@ -59,7 +59,7 @@ class PPN(object):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
         ppn1_scores, labels_ppn1, rois, ppn2_anchors, ppn2_proposals, ppn2_positives, \
-        ppn2_scores, ppn2_closest_gt_distance, ppn2_true_labels, ppn2_true_labels_both, ppn2_cls_score, \
+        ppn2_scores, ppn2_closest_gt_distance, ppn2_true_labels, ppn2_cls_score, \
         loss_ppn2_point, summary = sess.run([
                             self.train_op,
                             self._predictions['ppn1_pixel_pred'],
@@ -75,7 +75,6 @@ class PPN(object):
                             self._predictions['ppn2_scores'],
                             self._predictions['ppn2_closest_gt_distance'],
                             self._predictions['ppn2_true_labels'],
-                            self._predictions['ppn2_true_labels_both'],
                             self._predictions['ppn2_cls_score'],
                             self._losses['loss_ppn2_point'],
                             self.summary_op
@@ -94,98 +93,107 @@ class PPN(object):
         print("ppn2_scores: ", ppn2_scores.shape, ppn2_scores[0:10])
         print("ppn2_closest_gt_distance: ", ppn2_closest_gt_distance.shape, ppn2_closest_gt_distance[0:10])
         print("ppn2_true_labels: ", ppn2_true_labels.shape, ppn2_true_labels[0:10])
-        print("ppn2_true_labels_both: ", ppn2_true_labels_both.shape, ppn2_true_labels_both[0:10])
-        print("difference=", np.sum(np.abs(ppn2_true_labels - ppn2_true_labels_both)))
+        #print("ppn2_true_labels_both: ", ppn2_true_labels_both.shape, ppn2_true_labels_both[0:10])
+        #print("difference=", np.sum(np.abs(ppn2_true_labels - ppn2_true_labels_both)))
         print("ppn2_cls_scores: ", ppn2_cls_score.shape, ppn2_cls_score[0:10])
         print("#positives: ", np.sum(ppn2_positives))
         loss_ppn2_point_np = np.mean(np.mean(ppn2_closest_gt_distance[ppn2_positives]))
         print(loss_ppn2_point, loss_ppn2_point_np)
         #assert np.isclose(loss_ppn2_point, loss_ppn2_point_np)
-        
-        
+
+
         return summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives
 
     # def get_variables_to_restore(self, variables, var_keep_dic)
     # def get_summary(self, sess, blobs_val)
     # def fix_variables(self, sess, self.pretrained_model)
 
-    def create_architecture(self, is_training=True):
+    def create_architecture(self, is_training=True, reuse=False):
         self.is_training = is_training
-        # Define placeholders
-        # FIXME Assuming batch size of 1 currently
-        self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
-        # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
-        self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
+        self.reuse = reuse
+        with tf.variable_scope("ppn", reuse=self.reuse):
+            # Define placeholders
+            #with tf.variable_scope("placeholders", reuse=self.reuse):
+            # FIXME Assuming batch size of 1 currently
+            self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
+            # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
+            self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
 
-        # Define network regularizers
-        weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
-        biases_regularizer = tf.no_regularizer
-        with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                            weights_regularizer=weights_regularizer,
-                            biases_regularizer=biases_regularizer,
-                            biases_initializer=tf.constant_initializer(0.0)):
-            # Returns F3 and F5 feature maps
-            net, net2 = self.build_vgg()
-            # Build PPN1
-            rois = self.build_ppn1(net2)
+            # Define network regularizers
+            weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+            biases_regularizer = tf.no_regularizer
+            with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                                normalizer_fn=slim.batch_norm,
+                                trainable=self.is_training,
+                                weights_regularizer=weights_regularizer,
+                                biases_regularizer=biases_regularizer,
+                                biases_initializer=tf.constant_initializer(0.0)):
+                # Returns F3 and F5 feature maps
+                net, net2 = self.build_vgg()
+                # Build PPN1
+                rois = self.build_ppn1(net2)
 
-            if self.is_training:
-                # During training time, check if all ground truth pixels are covered by ROIs
-                # If not, add relevant ROIs on F3
-                # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
-                # but instead allow random variation
-                rois = include_gt_pixels(rois, self.get_gt_pixels())
-                assert rois.get_shape().as_list() == [None, 2]
-            self._predictions['rois'] = rois
+                if self.is_training:
+                    # During training time, check if all ground truth pixels are covered by ROIs
+                    # If not, add relevant ROIs on F3
+                    # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
+                    # but instead allow random variation
+                    rois = include_gt_pixels(rois, self.get_gt_pixels())
+                    assert rois.get_shape().as_list() == [None, 2]
 
-            # Pool to Pixels of Interest of intermediate layer
-            # FIXME How do we want to do the ROI pooling?
-            # Shape of rpn_pooling = nb_rois, 4, 4, 256
-            rpn_pooling = self.crop_pool_layer_2d(net, rois)
-            assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
+                self._predictions['rois'] = rois
 
-            proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
+                # Pool to Pixels of Interest of intermediate layer
+                # FIXME How do we want to do the ROI pooling?
+                # Shape of rpn_pooling = nb_rois, 4, 4, 256
+                rpn_pooling = self.crop_pool_layer_2d(net, rois)
+                assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
-            if self.is_training:
-                tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32)))
-                tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32)))
-                # FIXME How to combine losses
-                total_loss = self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
-                            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
-                            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class'])
-                self._losses['total_loss'] = total_loss
-                tf.summary.scalar('loss', total_loss)
-                tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
-                tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
-                tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
-                tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
+                proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
-                self.summary_op = tf.summary.merge_all()
-                global_step = tf.Variable(0, trainable=False)
-                lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
-                optimizer = tf.train.AdamOptimizer(lr)
-                self.train_op = optimizer.minimize(total_loss, global_step=global_step)
+                if self.is_training:
+                    tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32)))
+                    tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32)))
+                    # FIXME How to combine losses
+                    total_loss = self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
+                                + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
+                                + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
+                                + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class'])
+                    self._losses['total_loss'] = total_loss
+                    tf.summary.scalar('loss', total_loss)
+                    tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
+                    tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
+                    tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
+                    tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
+                    tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
+                    tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
+                    self.summary_op = tf.summary.merge_all()
+                    
+                    global_step = tf.Variable(0, trainable=False)
+                    lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
+                    optimizer = tf.train.AdamOptimizer(lr)
+                    self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 
-            # Testing time
-            # Turn predicted positions (float) into original image positions
-            # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
-            # then back to original image.
-            # FIXME take top scores only? or leave it to the demo script
-            im_proposals = (proposals2 + 4*rois)*8.0
-            im_labels = tf.argmax(scores2, axis=1)
-            im_scores = tf.gather(scores2, im_labels)
-            self._predictions['im_proposals'] = im_proposals
-            self._predictions['im_labels'] = im_labels
-            self._predictions['im_scores'] = im_scores
-            # We have now num_roi proposals and corresponding labels in original image.
-            # Pixel NMS equivalent ?
+                # Testing time
+                # Turn predicted positions (float) into original image positions
+                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
+                # then back to original image.
+                # FIXME take top scores only? or leave it to the demo script
+                im_proposals = (proposals2 + 4*rois)*8.0
+                im_labels = tf.argmax(scores2, axis=1)
+                im_scores = tf.gather(scores2, im_labels)
+                self._predictions['im_proposals'] = im_proposals
+                self._predictions['im_labels'] = im_labels
+                self._predictions['im_scores'] = im_scores
+                # We have now num_roi proposals and corresponding labels in original image.
+                # Pixel NMS equivalent ?
 
     def build_vgg(self):
         # =====================================================
         # --- VGG16 net = 13 conv layers with 5 max-pooling ---
         # =====================================================
-        with tf.variable_scope("vgg_16"):
+        # FIXME trainable=False for the first two layers
+        with tf.variable_scope("vgg_16", reuse=self.reuse):
             net = slim.repeat(self.image_placeholder, 2, slim.conv2d, 64, [3, 3],
                               trainable=False, scope='conv1')
             net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
@@ -209,7 +217,7 @@ class PPN(object):
         # =====================================================
         # ---       Pixel Proposal Network 1                ---
         # =====================================================
-        with tf.variable_scope("ppn1"):
+        with tf.variable_scope("ppn1", reuse=self.reuse):
             # Define initializers
             initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
 
@@ -218,14 +226,14 @@ class PPN(object):
             ppn1 = slim.conv2d(net2,
                               512, # RPN Channels = num_outputs
                               (3, 3), # RPN Kernels
-                              trainable=self.is_training,
                               weights_initializer=initializer,
+                              trainable=self.is_training,
                               scope="ppn1_conv/3x3")
             # Step 1-a) PPN 2 pixel position predictions
             # Shape of rpn_bbox_pred = 1, 16, 16, 2
             ppn1_pixel_pred = slim.conv2d(ppn1, 2, [1, 1],
-                                        trainable=self.is_training,
                                         weights_initializer=initializer,
+                                        trainable=self.is_training,
                                         padding='VALID',
                                         activation_fn=None,
                                         scope='ppn1_pixel_pred')
@@ -233,8 +241,8 @@ class PPN(object):
             # Shape of rpn_cls_score = 1, 16, 16, 2
             # FIXME use sigmoid instead of softmax?
             ppn1_cls_score = slim.conv2d(ppn1, 2, [1, 1],
-                                        trainable=self.is_training,
                                         weights_initializer=initializer,
+                                        trainable=self.is_training,
                                         padding='VALID',
                                         activation_fn=None,
                                         scope='ppn1_cls_score')
@@ -242,7 +250,6 @@ class PPN(object):
             # Compute softmax
             # Shape of rpn_cls_prob = 1, 16, 16, 2
             ppn1_cls_prob = tf.nn.softmax(ppn1_cls_score)
-            # print("rpn_cls_prob shape:", rpn_cls_prob.shape)
 
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Generate anchors = pixel centers of the last feature map.
@@ -292,13 +299,13 @@ class PPN(object):
                 labels_ppn1 = tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32)
                 loss_ppn1_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn1,
                                                                                                 logits=tf.reshape(ppn1_cls_score, (-1, 2)))))
-                #accuracy_ppn1 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(ppn1_cls_prob, axis=1), tf.int32), labels_ppn1), tf.float32))
+                accuracy_ppn1 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(tf.reshape(ppn1_cls_prob, (-1, 2)), axis=1), tf.int32), labels_ppn1), tf.float32))
 
                 self._predictions['ppn1_positives'] = classes_mask
                 self._predictions['labels_ppn1'] = labels_ppn1
                 self._losses['loss_ppn1_point'] =  loss_ppn1_point
                 self._losses['loss_ppn1_class'] = loss_ppn1_class
-                #self._predictions['accuracy_ppn1'] = accuracy_ppn1
+                self._predictions['accuracy_ppn1'] = accuracy_ppn1
 
             return rois
         # --- END of Pixel Proposal Network 1 ---
@@ -307,7 +314,7 @@ class PPN(object):
         # =====================================================
         # ---         Pixel Proposal Network 2              ---
         # =====================================================
-        with tf.variable_scope("ppn2"):
+        with tf.variable_scope("ppn2", reuse=self.reuse):
             # Define initializers
             initializer2=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
             batch_size = tf.shape(rpn_pooling)[0] # should be number of rois x number of pixels per roi
@@ -362,7 +369,8 @@ class PPN(object):
             if self.is_training:
                 # Find closest ground truth pixel and its label
                 # Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
-                closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois, scores=ppn2_cls_score)
+                # closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois, scores=ppn2_cls_score)
+                closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, ppn2=True)
                 assert closest_gt.get_shape().as_list() == [None]
                 assert closest_gt_distance.get_shape().as_list() == [None, 1]
                 assert true_labels.get_shape().as_list() == [None, 1]
@@ -378,15 +386,18 @@ class PPN(object):
                 loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
                 # second is a softmax class loss from both positives and negatives
                 # the true label is defined by the closest ground truth point’s label
-                _, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
-                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(tf.reshape(true_labels_both, (-1,)), tf.int32),
+                #_, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
+                labels_ppn2 = tf.cast(tf.reshape(true_labels, (-1,)), tf.int32)
+                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2,
                                                                                  logits=tf.reshape(ppn2_cls_score, (-1, self.num_classes)))))
+
+                accuracy_ppn2 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(tf.reshape(ppn2_cls_prob, (-1, self.num_classes)), axis=1), tf.int32), labels_ppn2), tf.float32))
 
                 self._predictions['ppn2_positives'] = positives
                 self._losses['loss_ppn2_point'] = loss_ppn2_point
                 self._losses['loss_ppn2_class'] = loss_ppn2_class
+                self._predictions['accuracy_ppn2'] = accuracy_ppn2
                 self._predictions['ppn2_true_labels'] = true_labels
-                self._predictions['ppn2_true_labels_both'] = true_labels_both
                 self._predictions['ppn2_closest_gt_distance'] = closest_gt_distance
 
             return proposals2, scores2

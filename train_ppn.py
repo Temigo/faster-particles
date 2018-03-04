@@ -17,14 +17,16 @@ os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 logdir = "log/run%d" % int(sys.argv[1])
-outputdir = "output/run%d" % int(sys.argv[1])
+outputdir = "/data/ldomine/run%d" % int(sys.argv[1])
 MAX_STEPS = int(sys.argv[2])
 # Define data generators
 train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 
-net = PPN()
-net.create_architecture()
+train_net = PPN()
+train_net.create_architecture(is_training=True, reuse=False)
+test_net = PPN()
+test_net.create_architecture(is_training=False, reuse=True)
 saver = tf.train.Saver()
 
 #with tf.Session() as sess:
@@ -47,9 +49,9 @@ for step in range(MAX_STEPS):
     #print(blob['gt_pixels'])
 
     if is_testing:
-        summary = net.get_summary(sess, blob)
+        im_proposals, im_labels, im_scores, ppn1_proposals, rois, ppn2_proposals = test_net.test_image(sess, blob)
     else:
-        summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = net.train_step_with_summary(sess, blob, None)
+        summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives = train_net.train_step_with_summary(sess, blob, None)
         if is_drawing:
             display(blob, ppn1_labels=labels_ppn1, rois=rois, ppn2_proposals=ppn2_proposals, ppn2_positives=ppn2_positives, index=step, name='display_train')
     if is_testing:
