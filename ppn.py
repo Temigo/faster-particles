@@ -13,11 +13,12 @@ import sys, os
 
 from ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
-    predicted_pixels, top_R_pixels, build_vgg
+    predicted_pixels, top_R_pixels
+from base_net import VGG
 
 class PPN(object):
 
-    def __init__(self, R=20, num_classes=3, N=512, build_base_net=build_vgg):
+    def __init__(self, R=20, num_classes=3, N=512, base_net=VGG):
         """
         Allow for easy implementation of different base network architecture:
         build_base_net should take as inputs
@@ -36,33 +37,28 @@ class PPN(object):
         self.lambda_ppn = 0.5 # Balance loss between ppn1 and ppn2
         self._predictions = {}
         self._losses = {}
-        self.build_base_net = build_base_net
+        self.base_net = base_net
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'] }
         im_proposals, im_labels, im_scores, ppn1_proposals, \
-        rois, ppn2_proposals = sess.run([
+        rois, ppn2_proposals, summary = sess.run([
             self._predictions['im_proposals'],
             self._predictions['im_labels'],
             self._predictions['im_scores'],
             self._predictions['ppn1_proposals'],
             self._predictions['rois'],
-            self._predictions['ppn2_proposals']
+            self._predictions['ppn2_proposals'],
+            self.summary_op
             ], feed_dict=feed_dict)
-        return im_proposals, im_labels, im_scores, ppn1_proposals, rois, ppn2_proposals
+        return summary, {'im_proposals': im_proposals,
+                        'im_labels': im_labels,
+                        'im_scores': im_scores,
+                        'ppn1_proposals': ppn1_proposals,
+                        'rois': rois,
+                        'ppn2_proposals': ppn2_proposals}
 
-    def get_summary(self, sess, blobs):
-        feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
-        summary = sess.run(self.summary_op, feed_dict=feed_dict)
-        return summary
-
-    # FIXME train_op argument useless?
-    def train_step(self, sess, blobs, train_op):
-        feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
-        _, total_loss = sess.run([self.train_op, self._losses['total_loss']], feed_dict=feed_dict)
-        return total_loss
-
-    def train_step_with_summary(self, sess, blobs, train_op):
+    def train_step_with_summary(self, sess, blobs):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_pixel_pred, ppn1_cls_prob, ppn1_anchors, ppn1_proposals, \
         ppn1_scores, labels_ppn1, rois, ppn2_anchors, ppn2_proposals, ppn2_positives, \
@@ -100,20 +96,17 @@ class PPN(object):
         print("ppn2_scores: ", ppn2_scores.shape, ppn2_scores[0:10])
         print("ppn2_closest_gt_distance: ", ppn2_closest_gt_distance.shape, ppn2_closest_gt_distance[0:10])
         print("ppn2_true_labels: ", ppn2_true_labels.shape, ppn2_true_labels[0:10])
-        #print("ppn2_true_labels_both: ", ppn2_true_labels_both.shape, ppn2_true_labels_both[0:10])
-        #print("difference=", np.sum(np.abs(ppn2_true_labels - ppn2_true_labels_both)))
         print("ppn2_cls_scores: ", ppn2_cls_score.shape, ppn2_cls_score[0:10])
         print("#positives: ", np.sum(ppn2_positives))
         loss_ppn2_point_np = np.mean(np.mean(ppn2_closest_gt_distance[ppn2_positives]))
         print(loss_ppn2_point, loss_ppn2_point_np)
         #assert np.isclose(loss_ppn2_point, loss_ppn2_point_np)
 
-
-        return summary, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives
-
-    # def get_variables_to_restore(self, variables, var_keep_dic)
-    # def get_summary(self, sess, blobs_val)
-    # def fix_variables(self, sess, self.pretrained_model)
+        return summary, {'ppn1_proposals': ppn1_proposals,
+                        'labels_ppn1': labels_ppn1,
+                        'rois': rois,
+                        'ppn2_proposals': ppn2_proposals,
+                        'ppn2_positives': ppn2_positives}
 
     def create_architecture(self, is_training=True, reuse=False):
         self.is_training = is_training
@@ -134,67 +127,67 @@ class PPN(object):
                             trainable=self.is_training,
                             weights_regularizer=weights_regularizer,
                             biases_regularizer=biases_regularizer,
-                            biases_initializer=tf.constant_initializer(0.0)):        
+                            biases_initializer=tf.constant_initializer(0.0)):
             # Returns F3 and F5 feature maps
-            net, net2 = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
-            with tf.variable_scope("ppn", reuse=self.reuse):
-                # Build PPN1
-                rois = self.build_ppn1(net2)
+            net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+            #with tf.variable_scope("ppn", reuse=self.reuse):
+            # Build PPN1
+            rois = self.build_ppn1(net2)
 
-                if self.is_training:
-                    # During training time, check if all ground truth pixels are covered by ROIs
-                    # If not, add relevant ROIs on F3
-                    # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
-                    # but instead allow random variation
-                    rois = include_gt_pixels(rois, self.get_gt_pixels())
-                    assert rois.get_shape().as_list() == [None, 2]
+            if self.is_training:
+                # During training time, check if all ground truth pixels are covered by ROIs
+                # If not, add relevant ROIs on F3
+                # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
+                # but instead allow random variation
+                rois = include_gt_pixels(rois, self.get_gt_pixels())
+                assert rois.get_shape().as_list() == [None, 2]
 
-                self._predictions['rois'] = rois
+            self._predictions['rois'] = rois
 
-                # Pool to Pixels of Interest of intermediate layer
-                # FIXME How do we want to do the ROI pooling?
-                # Shape of rpn_pooling = nb_rois, 4, 4, 256
-                rpn_pooling = self.crop_pool_layer_2d(net, rois)
-                assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
+            # Pool to Pixels of Interest of intermediate layer
+            # FIXME How do we want to do the ROI pooling?
+            # Shape of rpn_pooling = nb_rois, 4, 4, 256
+            rpn_pooling = self.crop_pool_layer_2d(net, rois)
+            assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
-                proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
+            proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
-                if self.is_training:
-                    tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32)))
-                    tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32)))
-                    # FIXME How to combine losses
-                    total_loss = self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
-                                + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
-                                + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                                + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class'])
-                    self._losses['total_loss'] = total_loss
-                    tf.summary.scalar('loss', total_loss)
-                    tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
-                    tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
-                    tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
-                    tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
-                    tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
-                    tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
-                    self.summary_op = tf.summary.merge_all()
+            if self.is_training:
+                tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32)))
+                tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32)))
+                # FIXME How to combine losses
+                total_loss = self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
+                            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
+                            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
+                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class'])
+                self._losses['total_loss'] = total_loss
+                tf.summary.scalar('loss', total_loss)
+                tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
+                tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
+                tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
+                tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
+                tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
+                tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
+                self.summary_op = tf.summary.merge_all()
 
-                    global_step = tf.Variable(0, trainable=False)
-                    lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
-                    optimizer = tf.train.AdamOptimizer(lr)
-                    self.train_op = optimizer.minimize(total_loss, global_step=global_step)
+                global_step = tf.Variable(0, trainable=False)
+                lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
+                optimizer = tf.train.AdamOptimizer(lr)
+                self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 
-                # Testing time
-                # Turn predicted positions (float) into original image positions
-                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
-                # then back to original image.
-                # FIXME take top scores only? or leave it to the demo script
-                im_proposals = (proposals2 + 4*rois)*8.0
-                im_labels = tf.argmax(scores2, axis=1)
-                im_scores = tf.gather(scores2, im_labels)
-                self._predictions['im_proposals'] = im_proposals
-                self._predictions['im_labels'] = im_labels
-                self._predictions['im_scores'] = im_scores
-                # We have now num_roi proposals and corresponding labels in original image.
-                # Pixel NMS equivalent ?
+            # Testing time
+            # Turn predicted positions (float) into original image positions
+            # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
+            # then back to original image.
+            # FIXME take top scores only? or leave it to the demo script
+            im_proposals = (proposals2 + 4*rois)*8.0
+            im_labels = tf.argmax(scores2, axis=1)
+            im_scores = tf.gather(scores2, im_labels)
+            self._predictions['im_proposals'] = im_proposals
+            self._predictions['im_labels'] = im_labels
+            self._predictions['im_scores'] = im_scores
+            # We have now num_roi proposals and corresponding labels in original image.
+            # Pixel NMS equivalent ?
 
     def build_ppn1(self, net2):
         # =====================================================
