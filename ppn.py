@@ -118,7 +118,7 @@ class PPN(object):
     def create_architecture(self, is_training=True, reuse=False):
         self.is_training = is_training
         self.reuse = reuse
-        with tf.variable_scope("ppn", reuse=self.reuse):
+        with tf.variable_scope("input", reuse=self.reuse):
             # Define placeholders
             #with tf.variable_scope("placeholders", reuse=self.reuse):
             # FIXME Assuming batch size of 1 currently
@@ -126,17 +126,18 @@ class PPN(object):
             # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
             self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
 
-            # Define network regularizers
-            weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
-            biases_regularizer = tf.no_regularizer
-            with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                                normalizer_fn=slim.batch_norm,
-                                trainable=self.is_training,
-                                weights_regularizer=weights_regularizer,
-                                biases_regularizer=biases_regularizer,
-                                biases_initializer=tf.constant_initializer(0.0)):
-                # Returns F3 and F5 feature maps
-                net, net2 = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+        # Define network regularizers
+        weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+        biases_regularizer = tf.no_regularizer
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                            normalizer_fn=slim.batch_norm,
+                            trainable=self.is_training,
+                            weights_regularizer=weights_regularizer,
+                            biases_regularizer=biases_regularizer,
+                            biases_initializer=tf.constant_initializer(0.0)):        
+            # Returns F3 and F5 feature maps
+            net, net2 = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+            with tf.variable_scope("ppn", reuse=self.reuse):
                 # Build PPN1
                 rois = self.build_ppn1(net2)
 

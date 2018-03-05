@@ -1,5 +1,5 @@
 # *-* encoding: utf-8 *-*
-# Usage: python train_ppn.py i max_steps [vgg.ckpt]
+# Usage: python train_ppn.py i max_steps [vgg.ckpt vgg_16]
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -17,9 +17,19 @@ from ppn_utils import build_vgg
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
+if not os.path.isdir("log"):
+    os.makedirs("log")
+if not os.path.isdir("display"):
+    os.makedirs("display")
+
 logdir = "log/run%d" % int(sys.argv[1])
 outputdir = "/data/ldomine/run%d" % int(sys.argv[1])
 MAX_STEPS = int(sys.argv[2])
+weights_file = None
+if len(sys.argv) == 4:
+    weights_file = sys.argv[3]
+    base_net = sys.argv[4]
+
 # Define data generators
 train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
@@ -28,16 +38,25 @@ train_net = PPN(build_base_net=build_vgg)
 train_net.create_architecture(is_training=True, reuse=False)
 test_net = PPN(build_base_net=build_vgg)
 test_net.create_architecture(is_training=False, reuse=True)
-saver = tf.train.Saver()
 
 #with tf.Session() as sess:
 sess = tf.InteractiveSession()
-# saver.restore(sess, sys.argv[3])
-# FIXME Fix variables? Cf faster-rcnn trainer.py source code
+
 summary_writer_train = tf.summary.FileWriter(logdir + '/train', sess.graph)
 summary_writer_test = tf.summary.FileWriter(logdir + '/test', sess.graph)
 sess.run(tf.global_variables_initializer())
-for step in range(MAX_STEPS):
+
+step = 0
+# Restore variables for base net if given checkpoint file
+if weights_file is not None:
+    variables_to_restore = [v for v in tf.global_variables() if base_net in v.name]
+    saver_base_net = tf.train.Saver(variables_to_restore)
+    saver_base_net.restore(sess, weights_file)
+# Global saver
+saver = tf.train.Saver()
+
+while step < MAX_STEPS+1:
+    step += 1
     is_testing = step%10 == 5
     is_drawing = step%1000 == 0
     if is_testing:
