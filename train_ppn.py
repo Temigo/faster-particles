@@ -12,6 +12,7 @@ matplotlib.use('Agg')
 from ppn import PPN
 from toydata_generator import ToydataGenerator
 from demo_ppn import display
+from ppn_utils import build_vgg
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -23,9 +24,9 @@ MAX_STEPS = int(sys.argv[2])
 train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
 
-train_net = PPN()
+train_net = PPN(build_base_net=build_vgg)
 train_net.create_architecture(is_training=True, reuse=False)
-test_net = PPN()
+test_net = PPN(build_base_net=build_vgg)
 test_net.create_architecture(is_training=False, reuse=True)
 saver = tf.train.Saver()
 

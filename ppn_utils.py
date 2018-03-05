@@ -3,6 +3,32 @@
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
+
+def build_vgg(image_placeholder, is_training=True, reuse=False):
+    # =====================================================
+    # --- VGG16 net = 13 conv layers with 5 max-pooling ---
+    # =====================================================
+    # FIXME trainable=False for the first two layers
+    with tf.variable_scope("vgg_16", reuse=reuse):
+        net = slim.repeat(image_placeholder, 2, slim.conv2d, 64, [3, 3],
+                          trainable=False, scope='conv1')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
+        net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
+                        trainable=False, scope='conv2')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
+        net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
+                        trainable=is_training, scope='conv3')
+        net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
+        net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
+                        trainable=is_training, scope='conv4')
+        net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
+        net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
+                        trainable=is_training, scope='conv5')
+        net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
+        # After 5 times (2, 2) pooling, if input image is 512x512
+        # the feature map should be spatial dimensions 16x16.
+        return net, net2
 
 def generate_anchors(width, height, repeat=1):
     """
@@ -194,7 +220,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, ppn2=False, rois=None, sc
         else:
             # Tile to have shape (A*N*N, None, 2)
             gt_pixels = gt_pixels / 32.0 # Convert to F5 coordinates
-        
+
         all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
         all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
 

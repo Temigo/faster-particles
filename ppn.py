@@ -13,11 +13,17 @@ import sys, os
 
 from ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
-    predicted_pixels, top_R_pixels
+    predicted_pixels, top_R_pixels, build_vgg
 
 class PPN(object):
 
-    def __init__(self, R=20, num_classes=3, N=512):
+    def __init__(self, R=20, num_classes=3, N=512, build_base_net=build_vgg):
+        """
+        Allow for easy implementation of different base network architecture:
+        build_base_net should take as inputs
+        (image_placeholder, is_training=True, reuse=False)
+        and return (F3, F5) conv layers
+        """
         # Global parameters
         self.R = R
         self.num_classes = num_classes # (B)ackground, (T)rack edge, (S)hower start, (S+T)
@@ -30,6 +36,7 @@ class PPN(object):
         self.lambda_ppn = 0.5 # Balance loss between ppn1 and ppn2
         self._predictions = {}
         self._losses = {}
+        self.build_base_net = build_base_net
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'] }
@@ -129,7 +136,7 @@ class PPN(object):
                                 biases_regularizer=biases_regularizer,
                                 biases_initializer=tf.constant_initializer(0.0)):
                 # Returns F3 and F5 feature maps
-                net, net2 = self.build_vgg()
+                net, net2 = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
                 # Build PPN1
                 rois = self.build_ppn1(net2)
 
@@ -187,31 +194,6 @@ class PPN(object):
                 self._predictions['im_scores'] = im_scores
                 # We have now num_roi proposals and corresponding labels in original image.
                 # Pixel NMS equivalent ?
-
-    def build_vgg(self):
-        # =====================================================
-        # --- VGG16 net = 13 conv layers with 5 max-pooling ---
-        # =====================================================
-        # FIXME trainable=False for the first two layers
-        with tf.variable_scope("vgg_16", reuse=self.reuse):
-            net = slim.repeat(self.image_placeholder, 2, slim.conv2d, 64, [3, 3],
-                              trainable=False, scope='conv1')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
-                            trainable=False, scope='conv2')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
-            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
-                            trainable=self.is_training, scope='conv3')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
-            net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
-                            trainable=self.is_training, scope='conv4')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
-            net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
-                            trainable=self.is_training, scope='conv5')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
-            # After 5 times (2, 2) pooling, if input image is 512x512
-            # the feature map should be spatial dimensions 16x16.
-            return net, net2
 
     def build_ppn1(self, net2):
         # =====================================================
@@ -293,8 +275,8 @@ class PPN(object):
                 # Step 4) compute loss for PPN1
                 # First is point loss: for positive pixels, distance from proposed pixel to closest ground truth pixel
                 # FIXME Use smooth L1 for distance loss?
-                #loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask)))
-                loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.exp(-1.0 * tf.boolean_mask(closest_gt_distance, classes_mask))))
+                loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, classes_mask)))
+                #loss_ppn1_point = tf.reduce_mean(tf.reduce_mean(tf.exp(1.0 * tf.boolean_mask(closest_gt_distance, classes_mask))))
                 # Use softmax_cross_entropy instead of sigmoid here
                 #loss_ppn1_class = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(classes_mask, tf.float32), logits=scores))
                 labels_ppn1 = tf.cast(tf.reshape(classes_mask, (-1,)), tf.int32)
@@ -384,8 +366,8 @@ class PPN(object):
                 # Step 4) Loss
                 # first is based on an absolute distance to the closest
                 # ground-truth point where only positives count
-                # loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
-                loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.exp(-1.0 * tf.boolean_mask(closest_gt_distance, positives))))
+                loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.boolean_mask(closest_gt_distance, positives)))
+                # loss_ppn2_point = tf.reduce_mean(tf.reduce_mean(tf.exp(1.0 * tf.boolean_mask(closest_gt_distance, positives))))
                 # second is a softmax class loss from both positives and negatives
                 # the true label is defined by the closest ground truth point’s label
                 #_, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
