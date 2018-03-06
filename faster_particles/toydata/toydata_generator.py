@@ -25,18 +25,7 @@ class ToydataGenerator(object):
         self.kinks = cfg.KINKS
 
         # Shower options
-        self.args_def = dict(
-            nx = cfg.IMAGE_SIZE,
-            ny = cfg.IMAGE_SIZE,
-            nlines = 10,
-            dtheta = cfg.DTHETA,
-            lmin = 40,
-            lmax = 127,
-            keep = 7,
-            keep_prob = 0.6,
-            nimages = 2,
-            out_png = False,
-        )
+        self.cfg = cfg
         self.gt_box_padding = 5
         self.batch_size = cfg.BATCH_SIZE
         self.classification = classification
@@ -64,7 +53,7 @@ class ToydataGenerator(object):
                     kinks = len(track_start_points)
                     track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
                 else:
-                    output_showers, shower_start_points, angle = make_shower(self.args_def)
+                    output_showers, shower_start_points, angle = make_shower(self.cfg)
                     output_tracks = np.zeros((self.N, self.N))
                     track_edges = []
                     image_label = 2 # shower image
@@ -82,7 +71,7 @@ class ToydataGenerator(object):
                 track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
 
         else:
-            output_showers, shower_start_points, angle = make_shower(self.args_def)
+            output_showers, shower_start_points, angle = make_shower(self.cfg)
             output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, max_track_length=self.max_track_length, padding=self.gt_box_padding)
             # start and end are ill-defined without charge gradient
             track_edges = track_start_points + track_end_points
