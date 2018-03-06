@@ -107,7 +107,10 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
 def inference(cfg):
     toydata = ToydataGenerator(cfg)
 
-    net = PPN()
+    if cfg.NET == 'ppn':
+        net = PPN()
+    elif cfg.NET == 'base':
+        net = VGG()
     net.init_placeholders()
     net.create_architecture(is_training=False)
 
@@ -117,8 +120,11 @@ def inference(cfg):
         saver.restore(sess, cfg.WEIGHTS_FILE)
         for i in range(10):
             blob = toydata.forward()
-            im_proposals, im_labels, im_scores, ppn1_proposals, rois, ppn2_proposals = net.test_image(sess, blob)
-            display(blob, im_proposals=im_proposals, im_labels=im_labels, im_scores=im_scores, index=i)
+            summary, results = net.test_image(sess, blob)
+            if cfg.NET == 'ppn':
+                display(blob, index=i, **results)
+            else:
+                print(results)
 
 if __name__ == '__main__':
     inference(cfg)
