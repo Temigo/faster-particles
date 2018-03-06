@@ -19,6 +19,17 @@ class VGG(object):
         _, summary = sess.run([self.train_op, self.summary_op], feed_dict=feed_dict)
         return summary, {}
 
+    def init_placeholders(self):
+        # Define placeholders
+        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3), name="image")
+        self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
+        self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
+        return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]
+
+    def restore_placeholder(self, names):
+        for attr, name in names:
+            setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
+
     def build_base_net(self, image_placeholder, is_training=True, reuse=False):
         # =====================================================
         # --- VGG16 net = 13 conv layers with 5 max-pooling ---
@@ -48,19 +59,18 @@ class VGG(object):
         self.is_training = is_training
         self.reuse = reuse
         # Define network
-        weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
-        biases_regularizer = tf.no_regularizer
-
         with tf.variable_scope("vgg_full", reuse=self.reuse):
-            # Define placeholders
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3))
-            self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1))
-            self.learning_rate_placeholder = tf.placeholder(tf.float32)
-            with slim.arg_scope([slim.conv2d, slim.fully_connected], weights_regularizer=weights_regularizer, biases_regularizer=biases_regularizer, biases_initializer=tf.constant_initializer(0.0)):
+            weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+            biases_regularizer = tf.no_regularizer
+            with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                weights_regularizer=weights_regularizer,
+                biases_regularizer=biases_regularizer,
+                biases_initializer=tf.constant_initializer(0.0)):
+
                 _, self.net = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
 
                 self.net_flat = slim.flatten(self.net, scope='flatten')
-                self.fc6 = slim.fully_connected(self.net_flat, 4096, scope='fc6')
+                self.fc6 = slim.fully_connected(self.net_flat, 2048, scope='fc6')
                 self.fc6 = slim.dropout(self.fc6, keep_prob=0.5, is_training=self.is_training, scope='dropout6')
                 #self.fc7 = slim.fully_connected(self.fc6, 4096, scope='fc7')
                 #self.fc7 = slim.dropout(self.fc7, keep_prob=0.5, is_training=True, scope='dropout7')

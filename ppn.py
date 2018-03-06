@@ -18,7 +18,7 @@ from base_net import VGG
 
 class PPN(object):
 
-    def __init__(self, R=20, num_classes=3, N=512, base_net=VGG(N=512, num_classes=3)):
+    def __init__(self, R=20, num_classes=3, N=512, base_net=VGG, base_net_args={"N": 512, "num_classes": 3}):
         """
         Allow for easy implementation of different base network architecture:
         build_base_net should take as inputs
@@ -37,7 +37,7 @@ class PPN(object):
         self.lambda_ppn = 0.5 # Balance loss between ppn1 and ppn2
         self._predictions = {}
         self._losses = {}
-        self.base_net = base_net
+        self.base_net = base_net(**base_net_args)
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
@@ -109,56 +109,35 @@ class PPN(object):
                         'ppn2_proposals': ppn2_proposals,
                         'ppn2_positives': ppn2_positives}
 
-    def build_base_net(self, image_placeholder, is_training=True, reuse=False):
-        # =====================================================
-        # --- VGG16 net = 13 conv layers with 5 max-pooling ---
-        # =====================================================
-        # FIXME trainable=False for the first two layers
-        with tf.variable_scope("vgg_16", reuse=reuse):
-            net = slim.repeat(image_placeholder, 2, slim.conv2d, 64, [3, 3],
-                              trainable=False, scope='conv1')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
-                            trainable=False, scope='conv2')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
-            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
-                            trainable=is_training, scope='conv3')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
-            net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
-                            trainable=is_training, scope='conv4')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
-            net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
-                            trainable=is_training, scope='conv5')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
-            # After 5 times (2, 2) pooling, if input image is 512x512
-            # the feature map should be spatial dimensions 16x16.
-            return net, net2
+    def init_placeholders(self):
+        # Define placeholders
+        #with tf.variable_scope("placeholders", reuse=self.reuse):
+        # FIXME Assuming batch size of 1 currently
+        self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
+        # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
+        self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
+        return [("image_placeholder", "image"), ("gt_pixels_placeholder", "gt_pixels")]
+
+    def restore_placeholder(self, names):
+        for attr, name in names:
+            setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
 
     def create_architecture(self, is_training=True, reuse=None):
         self.is_training = is_training
         self.reuse = reuse
-        with tf.variable_scope("input", reuse=self.reuse):
-        #image_placeholder = self.image_placeholder
-            # Define placeholders
-            #with tf.variable_scope("placeholders", reuse=self.reuse):
-            # FIXME Assuming batch size of 1 currently
-            self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
-            # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
-            self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
-        with tf.variable_scope("ppn", reuse=self.reuse):
 
-            # Define network regularizers
-            weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
-            biases_regularizer = tf.no_regularizer
-            with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                                normalizer_fn=slim.batch_norm,
-                                trainable=self.is_training,
-                                weights_regularizer=weights_regularizer,
-                                biases_regularizer=biases_regularizer,
-                                biases_initializer=tf.constant_initializer(0.0)):
-                # Returns F3 and F5 feature maps
-                net, net2 = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
-                #with tf.variable_scope("ppn", reuse=self.reuse):
+        # Define network regularizers
+        weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+        biases_regularizer = tf.no_regularizer
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                            normalizer_fn=slim.batch_norm,
+                            trainable=self.is_training,
+                            weights_regularizer=weights_regularizer,
+                            biases_regularizer=biases_regularizer,
+                            biases_initializer=tf.constant_initializer(0.0)):
+            # Returns F3 and F5 feature maps
+            net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+            with tf.variable_scope("ppn", reuse=self.reuse):
                 # Build PPN1
                 rois = self.build_ppn1(net2)
 
