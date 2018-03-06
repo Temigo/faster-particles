@@ -15,7 +15,7 @@ from demo_ppn import display
 from base_net import VGG
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
 class Trainer(object):
     def __init__(self, net, train_toydata, test_toydata, display_util=None, max_steps=100, weights_file=None, logdir="log", displaydir="display", outputdir="output"):
@@ -46,9 +46,9 @@ class Trainer(object):
 
     def train(self, net_args):
         print("Creating net architecture...")
-        self.train_net = self.net(**net_args)
-        self.test_net = self.net(**net_args)
-        self.train_net.create_architecture(is_training=True, reuse=False)
+        self.train_net = PPN(base_net=VGG(N=512, num_classes=3))
+        self.test_net = PPN(base_net=VGG(N=512, num_classes=3))
+        self.train_net.create_architecture(is_training=True, reuse=None)
         self.test_net.create_architecture(is_training=False, reuse=True)
         print("Done.")
 
@@ -72,8 +72,8 @@ class Trainer(object):
             else:
                 blob = self.train_toydata.forward()
 
-            if step%100 == 0:
-                print("Step %d" % step)
+            #if step%100 == 0:
+            print("Step %d" % step)
             #print(blob['gt_pixels'])
 
             if is_testing:
@@ -95,20 +95,20 @@ def train_ppn():
     # Define data generators
     train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
     test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-    net_args = {"base_net": VGG}
+    net_args = {"base_net": VGG(N=512, num_classes=3)}
 
     t = Trainer(PPN, train_toydata, test_toydata, display_util=display, max_steps=100, logdir="log/run17", displaydir="display/run17", outputdir="/data/ldomine/run17")
     t.train(net_args)
 
 def train_classification():
     # Define data generators
-    train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
-    test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
-    net_args = {"N": 512, "num_classes": 3}
+    train_toydata = ToydataGenerator(N=256, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
+    test_toydata = ToydataGenerator(N=256, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
+    net_args = {"N": 256, "num_classes": 3}
 
     t = Trainer(VGG, train_toydata, test_toydata, logdir="log/vgg", displaydir="display/vgg", outputdir="/data/ldomine/vgg")
     t.train(net_args)
 
 if __name__ == '__main__':
-    #train_ppn()
-    train_classification()
+    train_ppn()
+    #train_classification()

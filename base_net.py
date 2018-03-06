@@ -6,18 +6,16 @@ class VGG(object):
     def __init__(self, N, num_classes):
         self.N = N
         self.num_classes = num_classes
-        # Define placeholders
-        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3))
-        self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1))
-        self.learning_rate_placeholder = tf.placeholder(tf.float32)
+        self.learning_rate = 0.001
 
     def test_image(self, sess, blob):
-        feed_dict = { self.image_placeholder: blob['data'] }
+        print blob
+        feed_dict = { self.image_placeholder: blob['data'], self.labels_placeholder: blob['image_label'], self.learning_rate_placeholder: self.learning_rate }
         acc, summary = sess.run([self.accuracy, self.summary_op], feed_dict=feed_dict)
         return summary, {'acc': acc}
 
     def train_step_with_summary(self, sess, blobs):
-        feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
+        feed_dict = { self.image_placeholder: blobs['data'], self.labels_placeholder: blobs['image_label'], self.learning_rate_placeholder: self.learning_rate }
         _, summary = sess.run([self.train_op, self.summary_op], feed_dict=feed_dict)
         return summary, {}
 
@@ -54,6 +52,10 @@ class VGG(object):
         biases_regularizer = tf.no_regularizer
 
         with tf.variable_scope("vgg_full", reuse=self.reuse):
+            # Define placeholders
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3))
+            self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1))
+            self.learning_rate_placeholder = tf.placeholder(tf.float32)
             with slim.arg_scope([slim.conv2d, slim.fully_connected], weights_regularizer=weights_regularizer, biases_regularizer=biases_regularizer, biases_initializer=tf.constant_initializer(0.0)):
                 _, self.net = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
 
@@ -65,7 +67,6 @@ class VGG(object):
                 self.cls_score = slim.fully_connected(self.fc6, self.num_classes, weights_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.01), trainable=True, activation_fn=None, scope='cls_score')
                 self.cls_prob = tf.nn.softmax(self.cls_score, name='cls_prob')
                 self.cls_pred = tf.argmax(self.cls_score, axis=1, name='cls_pred')
-
             # Define loss
             self.labels = tf.reshape(self.labels_placeholder, [-1])
             #print cls_score.shape, labels_placeholder.shape
