@@ -4,27 +4,25 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-import sys, os
 import matplotlib
 matplotlib.use('Agg')
+import tensorflow as tf
+import sys, os
 
 from ppn import PPN
-from toydata_generator import ToydataGenerator
+from faster_particles import ToydataGenerator
 from demo_ppn import display
 from base_net import VGG
-
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+#from config import cfg
 
 class Trainer(object):
-    def __init__(self, net, train_toydata, test_toydata, display_util=None, max_steps=100, weights_file=None, logdir="log", displaydir="display", outputdir="output"):
+    def __init__(self, net, train_toydata, test_toydata, cfg, display_util=None, weights_file=None):
         self.train_toydata = train_toydata
         self.test_toydata = test_toydata
         self.net = net
-        self.logdir = logdir
-        self.displaydir = displaydir
-        self.outputdir = outputdir
+        self.logdir = cfg.LOG_DIR
+        self.displaydir = cfg.DISPLAY_DIR
+        self.outputdir = cfg.OUTPUT_DIR
         if not os.path.isdir(self.logdir):
             os.makedirs(self.logdir)
         if not os.path.isdir(self.displaydir):
@@ -32,7 +30,7 @@ class Trainer(object):
         if not os.path.isdir(self.outputdir):
             os.makedirs(self.outputdir)
 
-        self.MAX_STEPS = max_steps
+        self.MAX_STEPS = cfg.MAX_STEPS
         self.weights_file = weights_file
         self.display = display_util
 
@@ -91,25 +89,25 @@ class Trainer(object):
         summary_writer_train.close()
         summary_writer_test.close()
 
-def train_ppn():
+def train_ppn(cfg):
     # Define data generators
-    train_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-    test_toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-    net_args = {"base_net": VGG, "base_net_args": {"N": 512, "num_classes": 3}}
+    train_toydata = ToydataGenerator(cfg)
+    test_toydata = ToydataGenerator(cfg)
+    net_args = {"base_net": VGG, "base_net_args": {"N": cfg.IMAGE_SIZE, "num_classes": cfg.NUM_CLASSES}}
 
-    t = Trainer(PPN, train_toydata, test_toydata, display_util=display, max_steps=100, logdir="log/run17", displaydir="display/run17", outputdir="/data/ldomine/run17")
+    t = Trainer(PPN, train_toydata, test_toydata, cfg, display_util=display)
     t.train(net_args)
 
-def train_classification():
-    N = 512
+def train_classification(cfg):
     # Define data generators
-    train_toydata = ToydataGenerator(N=N, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
-    test_toydata = ToydataGenerator(N=N, max_tracks=5, max_kinks=2, max_track_length=200, classification=True)
-    net_args = {"N": N, "num_classes": 3}
+    train_toydata = ToydataGenerator(cfg, classification=True)
+    test_toydata = ToydataGenerator(cfg, classification=True)
+    net_args = {"N": cfg.IMAGE_SIZE, "num_classes": cfg.NUM_CLASSES}
 
-    t = Trainer(VGG, train_toydata, test_toydata, logdir="log/vgg", displaydir="display/vgg", outputdir="/data/ldomine/vgg")
+    t = Trainer(VGG, train_toydata, test_toydata, cfg)
     t.train(net_args)
 
 if __name__ == '__main__':
-    #train_ppn()
-    train_classification()
+    #train_ppn(cfg)
+    #train_classification(cfg)
+    pass

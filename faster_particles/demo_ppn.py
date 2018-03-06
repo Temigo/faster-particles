@@ -15,7 +15,7 @@ import tensorflow as tf
 import sys
 
 from ppn import PPN
-from toydata_generator import ToydataGenerator
+from faster_particles import ToydataGenerator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
@@ -104,22 +104,21 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     plt.savefig('display/' + name + '%d.png' % index)
     plt.close(fig)
 
-def inference():
-    toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
+def inference(cfg):
+    toydata = ToydataGenerator(cfg)
 
     net = PPN()
+    net.init_placeholders()
     net.create_architecture(is_training=False)
+
     saver = tf.train.Saver()
 
     with tf.Session() as sess:
-        saver.restore(sess, sys.argv[1])
+        saver.restore(sess, cfg.WEIGHTS_FILE)
         for i in range(10):
             blob = toydata.forward()
-            #print(blob)
             im_proposals, im_labels, im_scores, ppn1_proposals, rois, ppn2_proposals = net.test_image(sess, blob)
-            #print(im_labels[0], im_scores[0])
             display(blob, im_proposals=im_proposals, im_labels=im_labels, im_scores=im_scores, index=i)
-            #display(blob, ppn1_proposals=ppn1_proposals, rois=rois, ppn2_proposals=ppn2_proposals, index=i)
 
 if __name__ == '__main__':
-    inference()
+    inference(cfg)

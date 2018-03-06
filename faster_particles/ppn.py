@@ -6,9 +6,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-import numpy as np
 import sys, os
 
 from ppn_utils import include_gt_pixels, compute_positives_ppn2, \
@@ -18,7 +18,7 @@ from base_net import VGG
 
 class PPN(object):
 
-    def __init__(self, R=20, num_classes=3, N=512, base_net=VGG, base_net_args={"N": 512, "num_classes": 3}):
+    def __init__(self, cfg, base_net=VGG, base_net_args={"N": 512, "num_classes": 3}):
         """
         Allow for easy implementation of different base network architecture:
         build_base_net should take as inputs
@@ -26,15 +26,15 @@ class PPN(object):
         and return (F3, F5) conv layers
         """
         # Global parameters
-        self.R = R
-        self.num_classes = num_classes # (B)ackground, (T)rack edge, (S)hower start, (S+T)
-        self.N = N
-        self.ppn1_score_threshold = 0.5
-        self.ppn2_distance_threshold = 5
-        self.lr = 0.001 # Learning rate
-        self.lambda_ppn1 = 0.5 # Balance loss between class and distance in ppn1
-        self.lambda_ppn2 = 0.5 # Balance loss between class and distance in ppn2
-        self.lambda_ppn = 0.5 # Balance loss between ppn1 and ppn2
+        self.R = cfg.R
+        self.num_classes = cfg.IMAGE_SIZEUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
+        self.N = cfg.IMAGE_SIZE
+        self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
+        self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
+        self.lr = cfg.LEARNING_RATE # Learning rate
+        self.lambda_ppn1 = cfg.LAMBDA_PPN1 # Balance loss between class and distance in ppn1
+        self.lambda_ppn2 = cfg.LAMBDA_PPN2 # Balance loss between class and distance in ppn2
+        self.lambda_ppn = cfg.LAMBDA_PPN # Balance loss between ppn1 and ppn2
         self._predictions = {}
         self._losses = {}
         self.base_net = base_net(**base_net_args)

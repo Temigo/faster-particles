@@ -9,29 +9,27 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import sys
-from track_generator import generate_toy_tracks
-from shower_generator import make_shower
+from faster_particles.toydata.track_generator import generate_toy_tracks
+from faster_particles.toydata.shower_generator import make_shower
 
 class ToydataGenerator(object):
     CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
-    def __init__(self, N, max_tracks, max_kinks,
-                max_track_length=None, classification=False,
-                seed=123, kinks=None, dtheta=-1, batch_size=20):
-        self.N = N # shape of canvas
+    def __init__(self, cfg, classification=False):
+        self.N = cfg.IMAGE_SIZE # shape of canvas
 
         # Track options
-        self.max_tracks = max_tracks
-        self.max_kinks = max_kinks
-        self.max_track_length = max_track_length
-        self.kinks = kinks
+        self.max_tracks = cfg.MAX_TRACKS
+        self.max_kinks = cfg.MAX_KINKS
+        self.max_track_length = cfg.MAX_TRACK_LENGTH
+        self.kinks = cfg.KINKS
 
         # Shower options
         self.args_def = dict(
-            nx = N,
-            ny = N,
+            nx = cfg.IMAGE_SIZE,
+            ny = cfg.IMAGE_SIZE,
             nlines = 10,
-            dtheta = dtheta,
+            dtheta = cfg.DTHETA,
             lmin = 40,
             lmax = 127,
             keep = 7,
@@ -40,11 +38,11 @@ class ToydataGenerator(object):
             out_png = False,
         )
         self.gt_box_padding = 5
-        self.batch_size = batch_size
+        self.batch_size = cfg.BATCH_SIZE
         self.classification = classification
         if classification:
             self.max_tracks = 1
-        np.random.seed(seed)
+        np.random.seed(cfg.SEED)
 
     def num_classes(self):
         return 3

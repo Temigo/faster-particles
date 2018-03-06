@@ -3,9 +3,9 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 class VGG(object):
-    def __init__(self, N, num_classes):
-        self.N = N
-        self.num_classes = num_classes
+    def __init__(self, cfg):
+        self.N = cfg.IMAGE_SIZE
+        self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = 0.001
 
     def test_image(self, sess, blob):

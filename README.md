@@ -1,3 +1,5 @@
-# faster-particles
+faster-particles
+================
+
 * Generate toy dataset
-* to come soon
+* Pixel Proposal Network implementation using Tensorflow
