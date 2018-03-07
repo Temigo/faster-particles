@@ -65,6 +65,7 @@ class PPNConfig(object):
         self.train_parser.add_argument("-lppn", "--lambda-ppn", default=self.LAMBDA_PPN, type=float, help="Lambda PPN (for loss weighting)")
         self.train_parser.add_argument("-lppn1", "--lambda-ppn1", default=self.LAMBDA_PPN1, type=float, help="Lambda PPN1")
         self.train_parser.add_argument("-lppn2", "--lambda-ppn2", default=self.LAMBDA_PPN2, type=float, help="Lambda PPN2")
+        self.train_parser.add_argument("-w", "--weights-file", help="Tensorflow .ckpt file to load weights of trained model.")
 
         self.demo_parser = subparsers.add_parser("demo", help="Run Pixel Proposal Network demo.")
         self.demo_parser.add_argument("weights_file", help="Tensorflow .ckpt file to load weights of trained model.")

@@ -16,7 +16,7 @@ from faster_particles.base_net import VGG
 #from config import cfg
 
 class Trainer(object):
-    def __init__(self, net, train_toydata, test_toydata, cfg, display_util=None, weights_file=None):
+    def __init__(self, net, train_toydata, test_toydata, cfg, display_util=None):
         self.train_toydata = train_toydata
         self.test_toydata = test_toydata
         self.net = net
@@ -31,17 +31,17 @@ class Trainer(object):
             os.makedirs(self.outputdir)
 
         self.MAX_STEPS = cfg.MAX_STEPS
-        self.weights_file = weights_file
+        self.weights_file = cfg.WEIGHTS_FILE
         self.display = display_util
         self.cfg = cfg
 
-    def load_weights(self, sess, base_net=""):
+    def load_weights(self, sess, base_net="vgg"):
         # Restore variables for base net if given checkpoint file
         if self.weights_file is not None:
             print(tf.global_variables())
             variables_to_restore = [v for v in tf.global_variables() if base_net in v.name]
             saver_base_net = tf.train.Saver(variables_to_restore)
-            saver_base_net.restore(sess, weights_file)
+            saver_base_net.restore(sess, self.weights_file)
 
     def train(self, net_args):
         print("Creating net architecture...")
@@ -57,6 +57,7 @@ class Trainer(object):
         #with tf.Session() as sess:
         sess = tf.InteractiveSession()
 
+        self.load_weights(sess)
         summary_writer_train = tf.summary.FileWriter(self.logdir + '/train', sess.graph)
         summary_writer_test = tf.summary.FileWriter(self.logdir + '/test', sess.graph)
         sess.run(tf.global_variables_initializer())
@@ -84,7 +85,7 @@ class Trainer(object):
                 summary, result = self.train_net.train_step_with_summary(sess, blob)
                 summary_writer_train.add_summary(summary, step)
             if is_drawing and self.display is not None:
-                self.display(blob, index=step, name='display_train', **result)
+                self.display(blob, self.cfg, index=step, name='display_train', **result)
 
             if step%1000 == 0:
                 save_path = saver.save(sess, self.outputdir + "/model-%d.ckpt" % step)

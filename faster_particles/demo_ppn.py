@@ -12,7 +12,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import tensorflow as tf
-import sys
+import sys, os
 
 from faster_particles.ppn import PPN
 from faster_particles.base_net import VGG
@@ -20,7 +20,7 @@ from faster_particles import ToydataGenerator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
-def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
+def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
             rois=None, ppn2_proposals=None, ppn2_positives=None, im_labels=None,
             im_scores=None, index=0, name='display'):
     #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
@@ -42,8 +42,8 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                 ax.add_patch(
                     patches.Rectangle(
                         (coord[1], coord[0]),
-                        8, # width
-                        8, # height
+                        32, # width
+                        32, # height
                         #fill=False,
                         #hatch='\\',
                         facecolor='green',
@@ -92,8 +92,8 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     if im_proposals is not None and im_scores is not None:
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
-            print(im_labels[i])
-            plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
+            #print(im_labels[i])
+            #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
             if im_labels[i] == 0: # Track
                 plt.plot([proposal[1]], [proposal[0]], 'y+')
             elif im_labels[i] == 1: #Shower
@@ -102,7 +102,7 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                 raise Exception("Label unknown")
 
     #plt.imsave('display.png', blob['data'][0,:,:,0])
-    plt.savefig('display/' + name + '%d.png' % index)
+    plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '%d.png' % index))
     plt.close(fig)
 
 def inference(cfg):
@@ -126,7 +126,7 @@ def inference(cfg):
             blob = toydata.forward()
             summary, results = net.test_image(sess, blob)
             if cfg.NET == 'ppn':
-                display(blob, index=i, **results)
+                display(blob, cfg, index=i, **results)
             else:
                 print(blob, results)
 

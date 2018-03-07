@@ -54,10 +54,7 @@ class PPN(object):
             ], feed_dict=feed_dict)
         return summary, {'im_proposals': im_proposals,
                         'im_labels': im_labels,
-                        'im_scores': im_scores,
-                        'ppn1_proposals': ppn1_proposals,
-                        'rois': rois,
-                        'ppn2_proposals': ppn2_proposals}
+                        'im_scores': im_scores}
 
     def train_step_with_summary(self, sess, blobs):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
@@ -104,7 +101,7 @@ class PPN(object):
         #assert np.isclose(loss_ppn2_point, loss_ppn2_point_np)
 
         return summary, {'ppn1_proposals': ppn1_proposals,
-                        'labels_ppn1': labels_ppn1,
+                        'ppn1_labels': labels_ppn1,
                         'rois': rois,
                         'ppn2_proposals': ppn2_proposals,
                         'ppn2_positives': ppn2_positives}
