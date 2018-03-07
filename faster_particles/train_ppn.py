@@ -9,10 +9,10 @@ matplotlib.use('Agg')
 import tensorflow as tf
 import sys, os
 
-from ppn import PPN
+from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator
-from demo_ppn import display
-from base_net import VGG
+from faster_particles.demo_ppn import display
+from faster_particles.base_net import VGG
 #from config import cfg
 
 class Trainer(object):
@@ -33,6 +33,7 @@ class Trainer(object):
         self.MAX_STEPS = cfg.MAX_STEPS
         self.weights_file = weights_file
         self.display = display_util
+        self.cfg = cfg
 
     def load_weights(self, sess, base_net=""):
         # Restore variables for base net if given checkpoint file
@@ -44,6 +45,8 @@ class Trainer(object):
 
     def train(self, net_args):
         print("Creating net architecture...")
+        net_args['cfg'] = self.cfg
+        print(net_args, self.net)
         self.train_net = self.net(**net_args)
         self.test_net = self.net(**net_args)
         self.test_net.restore_placeholder(self.train_net.init_placeholders())
@@ -93,7 +96,7 @@ def train_ppn(cfg):
     # Define data generators
     train_toydata = ToydataGenerator(cfg)
     test_toydata = ToydataGenerator(cfg)
-    net_args = {"base_net": VGG, "base_net_args": {"N": cfg.IMAGE_SIZE, "num_classes": cfg.NUM_CLASSES}}
+    net_args = {"base_net": VGG, "base_net_args": {}}
 
     t = Trainer(PPN, train_toydata, test_toydata, cfg, display_util=display)
     t.train(net_args)
@@ -102,7 +105,7 @@ def train_classification(cfg):
     # Define data generators
     train_toydata = ToydataGenerator(cfg, classification=True)
     test_toydata = ToydataGenerator(cfg, classification=True)
-    net_args = {"N": cfg.IMAGE_SIZE, "num_classes": cfg.NUM_CLASSES}
+    net_args = {}
 
     t = Trainer(VGG, train_toydata, test_toydata, cfg)
     t.train(net_args)

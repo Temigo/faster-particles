@@ -50,7 +50,7 @@ class PPNConfig(object):
 
     def create_parsers(self):
         self.parser = argparse.ArgumentParser(description="Pixel Proposal Network")
-        subparsers = self.parser.add_subparsers(title="Modules", description="Valid subcommands", help="Train or run PPN")
+        subparsers = self.parser.add_subparsers(title="Modules", description="Valid subcommands", dest='script', help="Train or run PPN")
 
         self.train_parser = subparsers.add_parser("train", help="Train Pixel Proposal Network")
         self.train_parser.add_argument("-o", "--output-dir", action='store', type=str, required=True, help="Path to output directory.")
@@ -58,7 +58,6 @@ class PPNConfig(object):
         self.train_parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
         self.train_parser.add_argument("-c", "--num-classes", default=self.NUM_CLASSES, type=int, help="Number of classes (including background).")
         self.train_parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
-        self.train_parser.add_argument("-n", "--net", default='ppn', type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
         self.train_parser.add_argument("-r", "--r", default=self.R, type=int, help="Max number of ROIs from PPN1")
         self.train_parser.add_argument("-st", "--ppn1-score-threshold", default=self.PPN1_SCORE_THRESHOLD, type=float, help="Threshold on signal score to define positives in PPN1")
         self.train_parser.add_argument("-dt", "--ppn2-distance-threshold", default=self.PPN2_DISTANCE_THRESHOLD, type=float, help="Threshold on distance to closest ground truth pixel to define positives in PPN2")
@@ -78,6 +77,7 @@ class PPNConfig(object):
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
+        parser.add_argument("-n", "--net", default='ppn', type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, choices=[128, 256, 512], help="Width (and height) of image.")
         parser.add_argument("-mt", "--max-tracks", default=self.MAX_TRACKS, type=int, help="Maximum number of tracks generated per image (uniform distribution).")
         parser.add_argument("-mk", "--max-kinks", default=self.MAX_KINKS, type=int, help="Maximum number of kinks generated for any track.")
@@ -97,14 +97,14 @@ class PPNConfig(object):
     def parse_args(self):
         args = self.parser.parse_args()
         self.update(vars(args))
-        if self.NET == 'base':
+        if self.NET == 'base' and args.script == 'train':
             args.func = train_classification
         print self.NUM_CLASSES
         args.func(self)
 
     def update(self, args):
         for name in args:
-            if name != "func":
+            if name != "func" and name != 'script':
                 setattr(self, name.upper(), args[name])
 
 cfg = PPNConfig()

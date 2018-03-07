@@ -3,10 +3,20 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 class VGG(object):
-    def __init__(self, cfg):
+    def __init__(self, cfg=None):
         self.N = cfg.IMAGE_SIZE
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = 0.001
+
+    def init_placeholders(self):
+        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3), name="image")
+        self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
+        self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
+        return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]
+
+    def restore_placeholder(self, names):
+        for attr, name in names:
+            setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.labels_placeholder: blob['image_label'], self.learning_rate_placeholder: self.learning_rate }
@@ -17,17 +27,6 @@ class VGG(object):
         feed_dict = { self.image_placeholder: blobs['data'], self.labels_placeholder: blobs['image_label'], self.learning_rate_placeholder: self.learning_rate }
         _, summary = sess.run([self.train_op, self.summary_op], feed_dict=feed_dict)
         return summary, {}
-
-    def init_placeholders(self):
-        # Define placeholders
-        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3), name="image")
-        self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
-        self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
-        return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]
-
-    def restore_placeholder(self, names):
-        for attr, name in names:
-            setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
 
     def build_base_net(self, image_placeholder, is_training=True, reuse=False):
         # =====================================================
@@ -69,11 +68,11 @@ class VGG(object):
                 _, self.net = self.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
 
                 self.net_flat = slim.flatten(self.net, scope='flatten')
-                #self.fc6 = slim.fully_connected(self.net_flat, 2048, scope='fc6')
-                #self.fc6 = slim.dropout(self.fc6, keep_prob=0.5, is_training=self.is_training, scope='dropout6')
+                self.fc6 = slim.fully_connected(self.net_flat, 2048, scope='fc6')
+                self.fc6 = slim.dropout(self.fc6, keep_prob=0.5, is_training=self.is_training, scope='dropout6')
                 #self.fc7 = slim.fully_connected(self.fc6, 4096, scope='fc7')
                 #self.fc7 = slim.dropout(self.fc7, keep_prob=0.5, is_training=True, scope='dropout7')
-                self.cls_score = slim.fully_connected(self.net_flat, self.num_classes, weights_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.01), trainable=True, activation_fn=None, scope='cls_score')
+                self.cls_score = slim.fully_connected(self.fc6, self.num_classes, weights_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.01), trainable=True, activation_fn=None, scope='cls_score')
                 self.cls_prob = tf.nn.softmax(self.cls_score, name='cls_prob')
                 self.cls_pred = tf.argmax(self.cls_score, axis=1, name='cls_pred')
             # Define loss
@@ -88,3 +87,11 @@ class VGG(object):
 
             # Define summary
             self.summary_op = tf.summary.merge_all()
+
+if __name__ == '__main__':
+    class config(object):
+        IMAGE_SIZE = 512
+        NUM_CLASSES = 3
+        LEARNING_RATE = 0.001
+    v = VGG(cfg=config())
+    print(dir(v))

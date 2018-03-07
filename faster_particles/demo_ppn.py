@@ -14,7 +14,8 @@ import matplotlib.patches as patches
 import tensorflow as tf
 import sys
 
-from ppn import PPN
+from faster_particles.ppn import PPN
+from faster_particles.base_net import VGG
 from faster_particles import ToydataGenerator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
@@ -105,12 +106,15 @@ def display(blob, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     plt.close(fig)
 
 def inference(cfg):
-    toydata = ToydataGenerator(cfg)
+    if cfg.NET == 'ppn':
+        toydata = ToydataGenerator(cfg)
+    else:
+        toydata = ToydataGenerator(cfg, classification=True)
 
     if cfg.NET == 'ppn':
-        net = PPN()
+        net = PPN(cfg=cfg)
     elif cfg.NET == 'base':
-        net = VGG()
+        net = VGG(cfg=cfg)
     net.init_placeholders()
     net.create_architecture(is_training=False)
 
@@ -124,7 +128,7 @@ def inference(cfg):
             if cfg.NET == 'ppn':
                 display(blob, index=i, **results)
             else:
-                print(results)
+                print(blob, results)
 
 if __name__ == '__main__':
     inference(cfg)

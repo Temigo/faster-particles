@@ -11,14 +11,14 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import sys, os
 
-from ppn_utils import include_gt_pixels, compute_positives_ppn2, \
+from faster_particles.ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
     predicted_pixels, top_R_pixels
-from base_net import VGG
+from faster_particles.base_net import VGG
 
 class PPN(object):
 
-    def __init__(self, cfg, base_net=VGG, base_net_args={"N": 512, "num_classes": 3}):
+    def __init__(self, cfg=None, base_net=VGG, base_net_args={}):
         """
         Allow for easy implementation of different base network architecture:
         build_base_net should take as inputs
@@ -27,7 +27,7 @@ class PPN(object):
         """
         # Global parameters
         self.R = cfg.R
-        self.num_classes = cfg.IMAGE_SIZEUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
+        self.num_classes = cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = cfg.IMAGE_SIZE
         self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
         self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
@@ -37,7 +37,7 @@ class PPN(object):
         self.lambda_ppn = cfg.LAMBDA_PPN # Balance loss between ppn1 and ppn2
         self._predictions = {}
         self._losses = {}
-        self.base_net = base_net(**base_net_args)
+        self.base_net = base_net(cfg=cfg, **base_net_args)
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
