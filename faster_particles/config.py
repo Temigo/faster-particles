@@ -22,6 +22,7 @@ class PPNConfig(object):
     WEIGHTS_FILE = None # Path to pretrained checkpoint
     NET = 'ppn'
     MAX_STEPS = 100
+    WEIGHT_LOSS = True
 
     # Toydata configuration
     BATCH_SIZE = 20
@@ -66,7 +67,8 @@ class PPNConfig(object):
         self.train_parser.add_argument("-lppn1", "--lambda-ppn1", default=self.LAMBDA_PPN1, type=float, help="Lambda PPN1")
         self.train_parser.add_argument("-lppn2", "--lambda-ppn2", default=self.LAMBDA_PPN2, type=float, help="Lambda PPN2")
         self.train_parser.add_argument("-w", "--weights-file", help="Tensorflow .ckpt file to load weights of trained model.")
-
+        self.train_parser.add_argument("-wl", "--weight-loss", default=self.WEIGHT_LOSS, action='store_true', help="Weight the loss (balance track and shower)")
+        
         self.demo_parser = subparsers.add_parser("demo", help="Run Pixel Proposal Network demo.")
         self.demo_parser.add_argument("weights_file", help="Tensorflow .ckpt file to load weights of trained model.")
         self.demo_parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")

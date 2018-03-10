@@ -42,14 +42,17 @@ def top_R_pixels(proposals, scores, R=20, threshold=0.5):
         R = min(R, flat_scores.get_shape().as_list()[0])
         # Output of tf.nn.top_k will be sorted in descending order
         scores, keep = tf.nn.top_k(tf.squeeze(scores), k=R, sorted=True)
+        proposals = tf.gather(proposals, keep)
         assert scores.get_shape().as_list() == [R]
         assert keep.get_shape().as_list() == [R]
         # Select scores above threshold
         keep2 = tf.where(tf.greater(scores, threshold))
         assert keep2.get_shape().as_list() == [None, 1]
-        proposals = tf.gather(tf.gather(proposals, keep), tf.reshape(keep2, (-1,)))
-        scores = tf.gather(scores, keep2)
-        assert proposals.get_shape().as_list() == [None, 2]
+        proposals_final = tf.gather(proposals, tf.reshape(keep2, (-1,)))
+        scores_final = tf.gather(scores, keep2)
+
+        proposals, scores = tf.cond(tf.equal(tf.shape(proposals_final)[0], tf.constant(0)), true_fn=lambda:(tf.slice(proposals, [0, 0], [1, -1]), tf.slice(scores, [0], [1])), false_fn=lambda:(proposals_final, scores_final))
+        #assert proposals.get_shape().as_list() == [None, 2]
         return proposals, scores
 
 def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, classes=False):
@@ -74,17 +77,13 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
         proposals =  anchors + rpn_bbox_pred
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
-        #proposals = clip_pixels(proposals, im_shape)
+        proposals = clip_pixels(proposals, im_shape)
         rois = tf.cast(proposals, tf.float32)
         return rois, scores
 
-def include_gt_pixels(rois, gt_pixels):
+def slice_rois(rois):
     """
-    Rois: [None, 2] in F5 coordinates (floating point)
-    These ROIs are 4x4 on F3 feature map. Include 3x3 F3 pixels around pixels
-    containing ground truth points.
-    gt_pixels: shape (None, 2)
-    Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
+    Transform ROI (1 pixel on F5) into 4x4 ROIs on F3 (using F5 coordinates)
     """
     rois_x = tf.slice(rois, [0, 0], [-1, 1]) * 4.0
     rois_y = tf.slice(rois, [0, 1], [-1, 1]) * 4.0
@@ -107,14 +106,24 @@ def include_gt_pixels(rois, gt_pixels):
         tf.concat([rois_x+3, rois_y+3], axis=1),
     ], axis=0)
     rois = rois / 4.0
+    return rois    
 
+def include_gt_pixels(rois, gt_pixels):
+    """
+    Rois: [None, 2] in F5 coordinates (floating point)
+    These ROIs are 4x4 on F3 feature map. Include 3x3 F3 pixels around pixels
+    containing ground truth points.
+    gt_pixels: shape (None, 2)
+    Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
+    """
     # convert to F3 coordinates
     gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 8.0), tf.float32) # FIXME hardcoded
     # Get 3x3 pixels around this in F3
     gt_pixels_coord = tf.expand_dims(gt_pixels_coord, axis=1)
     #gt_pixels_coord = tf.transpose(gt_pixels_coord, perms=[0, 2, 1])
     gt_pixels_coord = tf.tile(gt_pixels_coord, [1, 9, 1]) # shape N x 9 x 2
-    update = tf.constant([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]], dtype=tf.float32)
+    # FIXME clip to image
+    update = tf.constant([[0, 0], [0, 1], [0, -1], [1, 0], [1, 1], [1, -1], [-1, 0], [-1, 1], [-1, -1]], dtype=tf.float32)
     update = tf.tile(tf.expand_dims(update, axis=0), [tf.shape(gt_pixels_coord)[0], 1, 1])
     gt_pixels_coord = gt_pixels_coord + update
     gt_pixels_coord = tf.reshape(gt_pixels_coord, (-1, 2)) # Shape N*9, 2
