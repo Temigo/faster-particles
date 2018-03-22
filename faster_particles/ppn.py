@@ -391,7 +391,7 @@ class PPN(object):
             #_, _, true_labels_both = assign_gt_pixels(self.gt_pixels_placeholder, proposals2)
             labels_ppn2 = tf.cast(tf.reshape(true_labels, (-1,)), tf.int32)
             logits = tf.reshape(ppn2_cls_score, (-1, self.num_classes))
-            
+
             if self.cfg.WEIGHT_LOSS:
                 track_indices = tf.where(tf.equal(labels_ppn2, tf.constant(1)))
                 shower_indices = tf.where(tf.equal(labels_ppn2, tf.constant(2)))
@@ -411,7 +411,7 @@ class PPN(object):
 
                 loss_ppn2_class = loss_ppn2_background + loss_ppn2_track + loss_ppn2_shower
             else:
-                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2, logits=logits)
+                loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2, logits=logits)))
 
             accuracy_ppn2 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(tf.reshape(ppn2_cls_prob, (-1, self.num_classes)), axis=1), tf.int32), labels_ppn2), tf.float32))
 

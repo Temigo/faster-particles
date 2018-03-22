@@ -90,23 +90,23 @@ def slice_rois(rois):
     rois = tf.concat([
         tf.concat([rois_x, rois_y], axis=1),
         tf.concat([rois_x, rois_y+1], axis=1),
-        tf.concat([rois_x, rois_y+2], axis=1),
-        tf.concat([rois_x, rois_y+3], axis=1),
+        tf.concat([rois_x, rois_y-1], axis=1),
+        tf.concat([rois_x, rois_y-2], axis=1),
         tf.concat([rois_x+1, rois_y], axis=1),
         tf.concat([rois_x+1, rois_y+1], axis=1),
-        tf.concat([rois_x+1, rois_y+2], axis=1),
-        tf.concat([rois_x+1, rois_y+3], axis=1),
-        tf.concat([rois_x+2, rois_y], axis=1),
-        tf.concat([rois_x+2, rois_y+1], axis=1),
-        tf.concat([rois_x+2, rois_y+2], axis=1),
-        tf.concat([rois_x+2, rois_y+3], axis=1),
-        tf.concat([rois_x+3, rois_y], axis=1),
-        tf.concat([rois_x+3, rois_y+1], axis=1),
-        tf.concat([rois_x+3, rois_y+2], axis=1),
-        tf.concat([rois_x+3, rois_y+3], axis=1),
+        tf.concat([rois_x+1, rois_y-1], axis=1),
+        tf.concat([rois_x+1, rois_y-2], axis=1),
+        tf.concat([rois_x-1, rois_y], axis=1),
+        tf.concat([rois_x-1, rois_y+1], axis=1),
+        tf.concat([rois_x-1, rois_y-1], axis=1),
+        tf.concat([rois_x-1, rois_y-2], axis=1),
+        tf.concat([rois_x-2, rois_y], axis=1),
+        tf.concat([rois_x-2, rois_y+1], axis=1),
+        tf.concat([rois_x-2, rois_y-1], axis=1),
+        tf.concat([rois_x-2, rois_y-2], axis=1),
     ], axis=0)
     rois = rois / 4.0
-    return rois    
+    return rois
 
 def include_gt_pixels(rois, gt_pixels):
     """
@@ -242,4 +242,5 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, ppn2=False, rois=None, sc
         closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True)
         #print("squeezed gt_pixels_placeholder shape=", tf.squeeze(tf.slice(gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1).shape)
         closest_gt_label = tf.nn.embedding_lookup(tf.slice(gt_pixels_placeholder, [0, 2], [-1, 1]), closest_gt)
+        # TODO Assign background label where closest gt pixel is too far away??
         return closest_gt, closest_gt_distance, closest_gt_label

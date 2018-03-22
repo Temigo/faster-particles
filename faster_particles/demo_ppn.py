@@ -25,7 +25,9 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
             im_scores=None, ppn2_pixels_pred=None, index=0, name='display'):
     #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
     #ax.imshow(blob['data'][0,:,:,0], interpolation='none', cmap='hot', origin='lower')
-
+    print(im_proposals)
+    print(im_scores)
+    print(im_labels)
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')
     ax.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
