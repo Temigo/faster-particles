@@ -58,8 +58,8 @@ class Trainer(object):
         sess = tf.InteractiveSession()
 
         self.load_weights(sess)
-        summary_writer_train = tf.summary.FileWriter(self.logdir + '/train', sess.graph)
-        summary_writer_test = tf.summary.FileWriter(self.logdir + '/test', sess.graph)
+        summary_writer_train = tf.summary.FileWriter(os.path.join(self.logdir, 'train'), sess.graph)
+        summary_writer_test = tf.summary.FileWriter(os.path.join(self.logdir, 'test'), sess.graph)
         sess.run(tf.global_variables_initializer())
 
         # Global saver
@@ -88,7 +88,7 @@ class Trainer(object):
                 self.display(blob, self.cfg, index=step, name='display_train', **result)
 
             if step%1000 == 0:
-                save_path = saver.save(sess, self.outputdir + "/model-%d.ckpt" % step)
+                save_path = saver.save(sess, os.path.join(self.outputdir, "model-%d.ckpt" % step))
 
         summary_writer_train.close()
         summary_writer_test.close()
