@@ -81,12 +81,12 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
         rois = tf.cast(proposals, tf.float32)
         return rois, scores
 
-def slice_rois(rois):
+def slice_rois(rois, dim2):
     """
     Transform ROI (1 pixel on F5) into 4x4 ROIs on F3 (using F5 coordinates)
     """
-    rois_x = tf.slice(rois, [0, 0], [-1, 1]) * 4.0
-    rois_y = tf.slice(rois, [0, 1], [-1, 1]) * 4.0
+    rois_x = tf.slice(rois, [0, 0], [-1, 1]) * dim2
+    rois_y = tf.slice(rois, [0, 1], [-1, 1]) * dim2
     rois = tf.concat([
         tf.concat([rois_x, rois_y], axis=1),
         tf.concat([rois_x, rois_y+1], axis=1),
@@ -105,10 +105,10 @@ def slice_rois(rois):
         tf.concat([rois_x-2, rois_y-1], axis=1),
         tf.concat([rois_x-2, rois_y-2], axis=1),
     ], axis=0)
-    rois = rois / 4.0
+    rois = rois / dim2
     return rois
 
-def include_gt_pixels(rois, gt_pixels):
+def include_gt_pixels(rois, gt_pixels, dim1, dim2):
     """
     Rois: [None, 2] in F5 coordinates (floating point)
     These ROIs are 4x4 on F3 feature map. Include 3x3 F3 pixels around pixels
@@ -117,7 +117,7 @@ def include_gt_pixels(rois, gt_pixels):
     Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
     """
     # convert to F3 coordinates
-    gt_pixels_coord = tf.cast(tf.floor(gt_pixels / 8.0), tf.float32) # FIXME hardcoded
+    gt_pixels_coord = tf.cast(tf.floor(gt_pixels / dim1), tf.float32)
     # Get 3x3 pixels around this in F3
     gt_pixels_coord = tf.expand_dims(gt_pixels_coord, axis=1)
     #gt_pixels_coord = tf.transpose(gt_pixels_coord, perms=[0, 2, 1])
@@ -131,7 +131,7 @@ def include_gt_pixels(rois, gt_pixels):
     # indices = tf.where(tf.less(gt_pixels_coord, 64))
     # gt_pixels_coord = tf.gather_nd(gt_pixels_coord, indices)
     # Go back to F5 coordinates
-    gt_pixels_coord = gt_pixels_coord / 4.0 # FIXME hardcoded
+    gt_pixels_coord = gt_pixels_coord / dim2
     # FIXME As soon as new version of Tensorflow supporting axis option
     # for tf.unique, replace the following rough patch.
     # In the meantime, we will have some duplicates between rois and gt_pixels.
@@ -139,7 +139,7 @@ def include_gt_pixels(rois, gt_pixels):
     assert rois.get_shape().as_list()[-1] == 2 and len(rois.get_shape().as_list()) == 2 # Shape [None, 2]
     return rois
 
-def compute_positives_ppn1(gt_pixels, N3):
+def compute_positives_ppn1(gt_pixels, N3, dim1, dim2):
     """
     Returns a mask corresponding to proposals shape = [N*N, 2]
     Positive = 1 = contains a ground truth pixel
@@ -150,7 +150,7 @@ def compute_positives_ppn1(gt_pixels, N3):
         classes = tf.zeros(shape=(N3, N3)) # FIXME don't hardcode 16
         # Convert to F5 coordinates (16x16)
         # Shape = None, 2
-        gt_pixels = tf.cast(tf.floor(gt_pixels / 32.0), tf.int32)
+        gt_pixels = tf.cast(tf.floor(gt_pixels / (dim1 * dim2)), tf.int32)
         # Assign positive pixels based on gt_pixels
         #classes = classes + tf.scatter_nd(gt_pixels, tf.constant(value=1.0, shape=tf.shape(gt_pixels)[0]), classes.shape)
         classes = classes + tf.scatter_nd(gt_pixels, tf.fill((tf.shape(gt_pixels)[0],), 1.0), classes.shape)
@@ -179,7 +179,7 @@ def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2
         #mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
         return mask
 
-def assign_gt_pixels(gt_pixels_placeholder, proposals, ppn2=False, rois=None, scores=None):
+def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, ppn2=False, rois=None, scores=None):
     """
     Proposals shape: [A*N*N, 2] (N=16 or 64)
     gt_pixels_placeholder is shape [None, 2+1]
@@ -199,10 +199,10 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, ppn2=False, rois=None, sc
         gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0], [-1, 2])
         gt_pixels = tf.expand_dims(gt_pixels, axis=0)
         if ppn2:
-            gt_pixels = gt_pixels / 8.0 # Convert to F3 coordinates
+            gt_pixels = gt_pixels / dim1 # Convert to F3 coordinates
         else:
             # Tile to have shape (A*N*N, None, 2)
-            gt_pixels = gt_pixels / 32.0 # Convert to F5 coordinates
+            gt_pixels = gt_pixels / (dim1 * dim2) # Convert to F5 coordinates
 
         all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
         all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)

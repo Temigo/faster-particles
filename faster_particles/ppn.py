@@ -29,10 +29,6 @@ class PPN(object):
         self.R = cfg.R
         self.num_classes = cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = cfg.IMAGE_SIZE
-        if self.N%32 != 0:
-            raise Exception("Image size must be a multiple of 32.")
-        self.N2 = int(self.N/8)
-        self.N3 = int(self.N/32)
         self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
         self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
         self.lr = cfg.LEARNING_RATE # Learning rate
@@ -134,6 +130,16 @@ class PPN(object):
         for attr, name in names:
             setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
 
+    def set_dimensions(self, f3shape, f5shape):
+        f3shape = f3shape.as_list()
+        f5shape = f5shape.as_list()
+        self.N2 = f3shape[1]
+        self.N3 = f5shape[1]
+        if self.N%self.N2 != 0 or self.N2%self.N3 != 0:
+            raise Exception("Layers dimensions are incompatibles.")
+        self.dim1 = int(self.N/self.N2)
+        self.dim2 = int(self.N2/self.N3)
+
     def create_architecture(self, is_training=True, reuse=None, scope="ppn"):
         self.is_training = is_training
         self.reuse = reuse
@@ -150,26 +156,26 @@ class PPN(object):
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Returns F3 and F5 feature maps
                 net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+                self.set_dimensions(net.shape, net2.shape)
 
                 # Build PPN1
                 rois = self.build_ppn1(net2)
-                rois = slice_rois(rois)
+                rois = slice_rois(rois, self.dim2)
 
                 if self.is_training:
                     # During training time, check if all ground truth pixels are covered by ROIs
                     # If not, add relevant ROIs on F3
                     # TODO Algorithm should not place 4x4 exactly centered around ground-truth point,
                     # but instead allow random variation
-                    rois = include_gt_pixels(rois, self.get_gt_pixels())
+                    rois = include_gt_pixels(rois, self.get_gt_pixels(), self.dim1, self.dim2)
                     assert rois.get_shape().as_list() == [None, 2]
 
                 self._predictions['rois'] = rois
 
                 # Pool to Pixels of Interest of intermediate layer
                 # FIXME How do we want to do the ROI pooling?
-                # Shape of rpn_pooling = nb_rois, 4, 4, 256
+                # Shape of rpn_pooling = nb_rois, 1, 1, 256
                 rpn_pooling = self.crop_pool_layer_2d(net, rois)
-                assert rpn_pooling.get_shape().as_list() == [None, 1, 1, 256]
 
                 #proposals2, scores2 = tf.cond(tf.equal(tf.shape(rois)[0], tf.constant(0)), true_fn=lambda: (tf.constant([]), tf.constant([])), false_fn=lambda: self.build_ppn2(rpn_pooling, rois))
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
@@ -208,7 +214,7 @@ class PPN(object):
                 # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
                 # then back to original image.
                 # FIXME take top scores only? or leave it to the demo script
-                im_proposals = (proposals2 + 4*rois)*8.0
+                im_proposals = (proposals2 + self.dim2*rois)*self.dim1
                 im_labels = tf.argmax(scores2, axis=1)
                 im_scores = tf.gather(scores2, im_labels)
                 self._predictions['im_proposals'] = im_proposals
@@ -281,7 +287,7 @@ class PPN(object):
             # all outputs from 1x1 convolution are categorized into “positives” and “negatives”.
             # Positives = pixels which contain a ground-truth point
             # Negatives = other pixels
-            classes_mask = compute_positives_ppn1(self.get_gt_pixels(), self.N3)
+            classes_mask = compute_positives_ppn1(self.get_gt_pixels(), self.N3, self.dim1, self.dim2)
             assert classes_mask.get_shape().as_list() == [self.N3**2, 1]
             # FIXME Use Kazu's pixel index to limit the number of gt points for
             # which we compute a distance from a unique proposed point per pixel.
@@ -289,7 +295,7 @@ class PPN(object):
             # For each pixel of the F5 features map get distance between proposed point
             # and the closest ground truth pixel
             # Don't forget to convert gt pixels coordinates to F5 coordinates
-            closest_gt, closest_gt_distance, _ = assign_gt_pixels(self.gt_pixels_placeholder, proposals)
+            closest_gt, closest_gt_distance, _ = assign_gt_pixels(self.gt_pixels_placeholder, proposals, self.dim1, self.dim2)
             assert closest_gt.get_shape().as_list() == [self.N3**2]
             assert closest_gt_distance.get_shape().as_list() == [self.N3**2, 1]
             #assert closest_gt_label.get_shape().as_list() == [256, 1]
@@ -376,7 +382,7 @@ class PPN(object):
             # Find closest ground truth pixel and its label
             # Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
             # closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois, scores=ppn2_cls_score)
-            closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, ppn2=True)
+            closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, self.dim1, self.dim2, ppn2=True)
             assert closest_gt.get_shape().as_list() == [None]
             assert closest_gt_distance.get_shape().as_list() == [None, 1]
             assert true_labels.get_shape().as_list() == [None, 1]
@@ -450,10 +456,8 @@ class PPN(object):
         Also assumes ROIs are 1x1 pixels on F3
         """
         with tf.variable_scope("crop_pool_layer"):
-            assert net.get_shape().as_list() == [1, self.N2, self.N2, 256]
-            assert rois.get_shape().as_list() == [None, 2]
             # Convert rois from F5 coordinates to F3 coordinates (x4)
-            rois = (rois*4.0) # FIXME hardcoded
+            rois = (rois*self.dim2)
             # Shape of boxes = [num_boxes, 4]
             # boxes[i] is specified in normalized coordinates [y1, x1, y2, x2]
             # with y1 < y2 ideally
@@ -476,18 +480,3 @@ class PPN(object):
 if __name__ == "__main__":
     net = PPN()
     net.create_architecture()
-    # Dummy 4x4 image
-    #dummy_rpn_cls_prob = np.ndarray([[[[0.5, 0.5], [0.5, 0.5]], [[0.5, 0.5], [0.5, 0.5]]]])
-    #dummy_rpn_bbox_pred = np.ndarray([])
-    #dummy_anchors =
-    #dummy_input_shape =
-    #proposal_layer_2d(dummy_rpn_cls_prob, dummy_rpn_bbox_pred, dummy_anchors, dummy_input_shape)
-
-    """image = tf.placeholder(tf.float32,[1,512,512,3])
-    net.set_input_shape(image)
-    # Create a session
-    sess = tf.InteractiveSession()
-    # Initialize variables
-    sess.run(tf.global_variables_initializer())
-    #ret = sess.run(net._anchors,feed_dict={})
-    #print('{:s}'.format(ret))"""

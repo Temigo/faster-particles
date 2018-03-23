@@ -1,5 +1,6 @@
 # *-* encoding: utf-8 *-*
-# Usage: python train_ppn.py i max_steps [vgg.ckpt vgg_16 0]
+# Trainer for both PPN and base network
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
