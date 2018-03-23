@@ -29,6 +29,10 @@ class PPN(object):
         self.R = cfg.R
         self.num_classes = cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = cfg.IMAGE_SIZE
+        if self.N%32 != 0:
+            raise Exception("Image size must be a multiple of 32.")
+        self.N2 = int(self.N/8)
+        self.N3 = int(self.N/32)
         self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
         self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
         self.lr = cfg.LEARNING_RATE # Learning rate
@@ -121,7 +125,7 @@ class PPN(object):
         # Define placeholders
         #with tf.variable_scope("placeholders", reuse=self.reuse):
         # FIXME Assuming batch size of 1 currently
-        self.image_placeholder       = tf.placeholder(name="image", shape=(1, 512, 512, 3), dtype=tf.float32)
+        self.image_placeholder       = tf.placeholder(name="image", shape=(1, self.N, self.N, 3), dtype=tf.float32)
         # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
         self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
         return [("image_placeholder", "image"), ("gt_pixels_placeholder", "gt_pixels")]
@@ -253,15 +257,15 @@ class PPN(object):
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Generate anchors = pixel centers of the last feature map.
             # Shape of anchors = 16*16, 2
-            anchors = generate_anchors(width=16, height=16) # FIXME express width and height better
-            assert anchors.get_shape().as_list() == [256, 2]
+            anchors = generate_anchors(width=self.N3, height=self.N3) # FIXME express width and height better
+            assert anchors.get_shape().as_list() == [self.N3**2, 2]
 
             # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
             # and anchors. Take the first R proposed pixels which contain an object.
-            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (64, 64)) # FIXME hardcoded
+            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (self.N2, self.N2)) # FIXME hardcoded
             rois, roi_scores = top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
-            assert proposals.get_shape().as_list() == [256, 2]
-            assert scores.get_shape().as_list() == [256, 1]
+            assert proposals.get_shape().as_list() == [self.N3**2, 2]
+            assert scores.get_shape().as_list() == [self.N3**2, 1]
             #assert rois.get_shape().as_list() == [None, 2]
             #assert roi_scores.get_shape().as_list() == [None, 1]
 
@@ -276,8 +280,8 @@ class PPN(object):
             # all outputs from 1x1 convolution are categorized into “positives” and “negatives”.
             # Positives = pixels which contain a ground-truth point
             # Negatives = other pixels
-            classes_mask = compute_positives_ppn1(self.get_gt_pixels())
-            assert classes_mask.get_shape().as_list() == [256, 1]
+            classes_mask = compute_positives_ppn1(self.get_gt_pixels(), self.N3)
+            assert classes_mask.get_shape().as_list() == [self.N3**2, 1]
             # FIXME Use Kazu's pixel index to limit the number of gt points for
             # which we compute a distance from a unique proposed point per pixel.
 
@@ -285,8 +289,8 @@ class PPN(object):
             # and the closest ground truth pixel
             # Don't forget to convert gt pixels coordinates to F5 coordinates
             closest_gt, closest_gt_distance, _ = assign_gt_pixels(self.gt_pixels_placeholder, proposals)
-            assert closest_gt.get_shape().as_list() == [256]
-            assert closest_gt_distance.get_shape().as_list() == [256, 1]
+            assert closest_gt.get_shape().as_list() == [self.N3**2]
+            assert closest_gt_distance.get_shape().as_list() == [self.N3**2, 1]
             #assert closest_gt_label.get_shape().as_list() == [256, 1]
             self._predictions['ppn1_closest_gt'] = closest_gt
             self._predictions['ppn1_closest_gt_distance'] = closest_gt_distance
@@ -445,7 +449,7 @@ class PPN(object):
         Also assumes ROIs are 1x1 pixels on F3
         """
         with tf.variable_scope("crop_pool_layer"):
-            assert net.get_shape().as_list() == [1, 64, 64, 256]
+            assert net.get_shape().as_list() == [1, self.N2, self.N2, 256]
             assert rois.get_shape().as_list() == [None, 2]
             # Convert rois from F5 coordinates to F3 coordinates (x4)
             rois = (rois*4.0) # FIXME hardcoded
@@ -454,7 +458,7 @@ class PPN(object):
             # with y1 < y2 ideally
             boxes = tf.concat([rois, rois+1], axis=1)
             # then to normalized coordinates in [0, 1] of F3 feature map
-            boxes = boxes / 64.0 # FIXME hardcoded
+            boxes = boxes / float(self.N2)
             assert boxes.get_shape().as_list() == [None, 4]
 
             # Shape of box_ind = [num_boxes] with values in [0, batch_size)

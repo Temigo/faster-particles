@@ -8,12 +8,12 @@ import sys
 
 def make_shower(cfg):
 
-    img = np.zeros(shape=(cfg.SHOWER_NX, cfg.SHOWER_NY), dtype=int)
+    img = np.zeros(shape=(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE), dtype=int)
 
     # randomly generate starting point
     # note there is a lmax buffer on the boundaries of canvas
     # so that shower doesn't fall off the image
-    vx, vy = np.random.randint(cfg.SHOWER_L_MAX,cfg.SHOWER_NX-cfg.SHOWER_L_MAX), np.random.randint(cfg.SHOWER_L_MAX,cfg.SHOWER_NY-cfg.SHOWER_L_MAX)
+    vx, vy = np.random.randint(cfg.SHOWER_L_MAX,cfg.IMAGE_SIZE-cfg.SHOWER_L_MAX), np.random.randint(cfg.SHOWER_L_MAX,cfg.IMAGE_SIZE-cfg.SHOWER_L_MAX)
     theta0 = np.random.uniform(2.*np.pi) # central angle of shower
 
     # randomly generate nlines endpoints such that the lines fall
@@ -44,7 +44,7 @@ def make_shower(cfg):
 
 def make_showerset(cfg):
     blob = {}
-    batch_data = np.zeros((cfg.SHOWER_N_IMAGES, cfg.SHOWER_NX, cfg.SHOWER_NY))
+    batch_data = np.zeros((cfg.SHOWER_N_IMAGES, cfg.IMAGE_SIZE, cfg.IMAGE_SIZE))
     batch_angles = np.zeros((cfg.SHOWER_N_IMAGES,))
     for i in range(cfg.SHOWER_N_IMAGES):
         img, _, a = make_shower(args)

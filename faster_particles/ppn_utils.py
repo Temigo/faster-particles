@@ -139,7 +139,7 @@ def include_gt_pixels(rois, gt_pixels):
     assert rois.get_shape().as_list()[-1] == 2 and len(rois.get_shape().as_list()) == 2 # Shape [None, 2]
     return rois
 
-def compute_positives_ppn1(gt_pixels):
+def compute_positives_ppn1(gt_pixels, N3):
     """
     Returns a mask corresponding to proposals shape = [N*N, 2]
     Positive = 1 = contains a ground truth pixel
@@ -147,7 +147,7 @@ def compute_positives_ppn1(gt_pixels):
     Returns classes with shape (16*16,1)
     """
     with tf.variable_scope("ppn1_compute_positives"):
-        classes = tf.zeros(shape=(16, 16)) # FIXME don't hardcode 16
+        classes = tf.zeros(shape=(N3, N3)) # FIXME don't hardcode 16
         # Convert to F5 coordinates (16x16)
         # Shape = None, 2
         gt_pixels = tf.cast(tf.floor(gt_pixels / 32.0), tf.int32)

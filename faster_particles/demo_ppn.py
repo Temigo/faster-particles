@@ -112,8 +112,8 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
                 plt.plot([proposal[1]], [proposal[0]], 'go')
             else:
                 raise Exception("Label unknown")
-    ax2.set_xlim(0, 512)
-    ax2.set_ylim(0, 512)
+    ax2.set_xlim(0, cfg.IMAGE_SIZE)
+    ax2.set_ylim(0, cfg.IMAGE_SIZE)
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
 
