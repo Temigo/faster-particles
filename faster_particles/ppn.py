@@ -134,7 +134,7 @@ class PPN(object):
         for attr, name in names:
             setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
 
-    def create_architecture(self, is_training=True, reuse=None):
+    def create_architecture(self, is_training=True, reuse=None, scope="ppn"):
         self.is_training = is_training
         self.reuse = reuse
 
@@ -147,9 +147,10 @@ class PPN(object):
                             weights_regularizer=weights_regularizer,
                             biases_regularizer=biases_regularizer,
                             biases_initializer=tf.constant_initializer(0.0)):
-            # Returns F3 and F5 feature maps
-            net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
-            with tf.variable_scope("ppn", reuse=self.reuse):
+            with tf.variable_scope(scope, reuse=self.reuse):
+                # Returns F3 and F5 feature maps
+                net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+
                 # Build PPN1
                 rois = self.build_ppn1(net2)
                 rois = slice_rois(rois)
@@ -197,7 +198,7 @@ class PPN(object):
 
                     global_step = tf.Variable(0, trainable=False)
                     lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
-                    optimizer = tf.train.AdamOptimizer(learning_rate=lr, name="PPN_Adam")
+                    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
                     self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 
                 self.summary_op = tf.summary.merge_all()

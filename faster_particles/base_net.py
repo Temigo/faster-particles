@@ -34,30 +34,38 @@ class VGG(object):
         # =====================================================
         # FIXME trainable=False for the first two layers
         with tf.variable_scope("vgg_16", reuse=reuse):
-            net = slim.repeat(image_placeholder, 2, slim.conv2d, 64, [3, 3],
-                              trainable=False, scope='conv1')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
-                            trainable=False, scope='conv2')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
-            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
-                            trainable=is_training, scope='conv3')
-            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
-            net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
-                            trainable=is_training, scope='conv4')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
-            net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
-                            trainable=is_training, scope='conv5')
-            net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
-            # After 5 times (2, 2) pooling, if input image is 512x512
-            # the feature map should be spatial dimensions 16x16.
+            weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
+            biases_regularizer = tf.no_regularizer
+            with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                                normalizer_fn=slim.batch_norm,
+                                trainable=is_training,
+                                weights_regularizer=weights_regularizer,
+                                biases_regularizer=biases_regularizer,
+                                biases_initializer=tf.constant_initializer(0.0)):
+                net = slim.repeat(image_placeholder, 2, slim.conv2d, 64, [3, 3],
+                                  trainable=is_training, scope='conv1')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
+                net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
+                                trainable=is_training, scope='conv2')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
+                net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
+                                trainable=is_training, scope='conv3')
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
+                net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
+                                trainable=is_training, scope='conv4')
+                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
+                net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
+                                trainable=is_training, scope='conv5')
+                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
+                # After 5 times (2, 2) pooling, if input image is 512x512
+                # the feature map should be spatial dimensions 16x16.
             return net, net2
 
-    def create_architecture(self, is_training=True, reuse=False):
+    def create_architecture(self, is_training=True, reuse=False, scope="vgg_full"):
         self.is_training = is_training
         self.reuse = reuse
         # Define network
-        with tf.variable_scope("vgg_full", reuse=self.reuse):
+        with tf.variable_scope(scope, reuse=self.reuse):
             weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
             biases_regularizer = tf.no_regularizer
             with slim.arg_scope([slim.conv2d, slim.fully_connected],

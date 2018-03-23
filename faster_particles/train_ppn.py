@@ -38,26 +38,26 @@ class Trainer(object):
     def load_weights(self, sess, base_net="vgg"):
         # Restore variables for base net if given checkpoint file
         if self.weights_file is not None:
-            print(tf.global_variables())
+            print("Restoring checkpoint file...")
             variables_to_restore = [v for v in tf.global_variables() if base_net in v.name]
             saver_base_net = tf.train.Saver(variables_to_restore)
             saver_base_net.restore(sess, self.weights_file)
+            print("Done.")
 
     def train(self, net_args):
         print("Creating net architecture...")
         net_args['cfg'] = self.cfg
-        print(net_args, self.net)
         self.train_net = self.net(**net_args)
         self.test_net = self.net(**net_args)
         self.test_net.restore_placeholder(self.train_net.init_placeholders())
-        self.train_net.create_architecture(is_training=True, reuse=False)
-        self.test_net.create_architecture(is_training=False, reuse=True)
+        self.train_net.create_architecture(is_training=True, reuse=False, scope="ppn")
+        self.test_net.create_architecture(is_training=False, reuse=True, scope="ppn")
         print("Done.")
 
         #with tf.Session() as sess:
         sess = tf.InteractiveSession()
 
-        self.load_weights(sess)
+        self.load_weights(sess, base_net=base_net)
         summary_writer_train = tf.summary.FileWriter(os.path.join(self.logdir, 'train'), sess.graph)
         summary_writer_test = tf.summary.FileWriter(os.path.join(self.logdir, 'test'), sess.graph)
         sess.run(tf.global_variables_initializer())
