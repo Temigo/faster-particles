@@ -1,13 +1,70 @@
-# Define some base networks
+# Define some base networks for PPN
+# Currently only VGG is implemented.
+# To add more base networks inherit from BaseNet class and update basenets variable.
+
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-class VGG(object):
-    def __init__(self, cfg=None):
+
+class BaseNet(object):
+    """
+    Skeleton class from which any base network should inherit.
+    PPN will assume this class structure for the base network.
+    """
+    def __init__(self, cfg):
         self.N = cfg.IMAGE_SIZE
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = 0.001
 
+    def init_placeholders(self):
+        """
+        Define placeholders here as class attributes.
+        @return: List of tuples (attribute_name, tf_name)
+        """
+        raise NotImplementedError
+
+    def restore_placeholder(self, names):
+        """
+        For the test network to restore the placeholders previously created
+        by the train network.
+        @param names List of tuples (attribute_name, tf_name)
+        """
+        raise NotImplementedError
+
+    def test_image(self, sess, blob):
+        """
+        Run inference on a single image.
+        @param sess Tensorflow current session.
+        @param blob Data dictionary.
+        @return: summary, dictionary of results
+        """
+        raise NotImplementedError
+
+    def train_step_with_summary(self, sess, blobs):
+        """
+        Run training step.
+        @param sess Tensorflow current session.
+        @param blob Data dictionary.
+        @return: summary, dictionary of results
+        """
+        raise NotImplementedError
+
+    def build_base_net(self, image_placeholder, is_training=True, reuse=False):
+        """
+        Called by PPN and by the base net during training.
+        @return: F3 and F5 layers
+        """
+        raise NotImplementedError
+
+    def create_architecture(self, is_training=True, reuse=False, scope="base_net"):
+        """
+        Called to train the base network only.
+        @param scope Scope name to be shared between base network and PPN.
+        """
+        raise NotImplementedError
+
+
+class VGG(BaseNet):
     def init_placeholders(self):
         self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3), name="image")
         self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
@@ -32,7 +89,6 @@ class VGG(object):
         # =====================================================
         # --- VGG16 net = 13 conv layers with 5 max-pooling ---
         # =====================================================
-        # FIXME trainable=False for the first two layers
         with tf.variable_scope("vgg_16", reuse=reuse):
             weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
             biases_regularizer = tf.no_regularizer
@@ -85,16 +141,16 @@ class VGG(object):
                 self.cls_pred = tf.argmax(self.cls_score, axis=1, name='cls_pred')
             # Define loss
             self.labels = tf.reshape(self.labels_placeholder, [-1])
-            #print cls_score.shape, labels_placeholder.shape
             self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.cls_score, labels=self.labels))
-            #self.train_op = tf.train.GradientDescentOptimizer(self.learning_rate_placeholder).minimize(self.loss)
             self.train_op = tf.train.AdamOptimizer(self.learning_rate_placeholder).minimize(self.loss)
             tf.summary.scalar('loss', self.loss)
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.cast(self.cls_pred, tf.int32), self.labels), tf.float32))
             tf.summary.scalar('accuracy', self.accuracy)
-
             # Define summary
             self.summary_op = tf.summary.merge_all()
+
+# Available base networks
+basenets = { "vgg": VGG }
 
 if __name__ == '__main__':
     class config(object):

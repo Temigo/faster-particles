@@ -12,7 +12,7 @@ import sys, os
 from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator
 from faster_particles.demo_ppn import display
-from faster_particles.base_net import VGG
+from faster_particles.base_net import basenets
 #from config import cfg
 
 class Trainer(object):
@@ -35,11 +35,11 @@ class Trainer(object):
         self.display = display_util
         self.cfg = cfg
 
-    def load_weights(self, sess, base_net="vgg"):
+    def load_weights(self, sess):
         # Restore variables for base net if given checkpoint file
         if self.weights_file is not None:
             print("Restoring checkpoint file...")
-            variables_to_restore = [v for v in tf.global_variables() if base_net in v.name]
+            variables_to_restore = [v for v in tf.global_variables() if self.cfg.BASE_NET in v.name]
             saver_base_net = tf.train.Saver(variables_to_restore)
             saver_base_net.restore(sess, self.weights_file)
             print("Done.")
@@ -57,7 +57,7 @@ class Trainer(object):
         #with tf.Session() as sess:
         sess = tf.InteractiveSession()
 
-        self.load_weights(sess, base_net=base_net)
+        self.load_weights(sess)
         summary_writer_train = tf.summary.FileWriter(os.path.join(self.logdir, 'train'), sess.graph)
         summary_writer_test = tf.summary.FileWriter(os.path.join(self.logdir, 'test'), sess.graph)
         sess.run(tf.global_variables_initializer())
@@ -97,7 +97,7 @@ def train_ppn(cfg):
     # Define data generators
     train_toydata = ToydataGenerator(cfg)
     test_toydata = ToydataGenerator(cfg)
-    net_args = {"base_net": VGG, "base_net_args": {}}
+    net_args = {"base_net": basenets[cfg.BASE_NET], "base_net_args": {}}
 
     t = Trainer(PPN, train_toydata, test_toydata, cfg, display_util=display)
     t.train(net_args)
@@ -108,7 +108,7 @@ def train_classification(cfg):
     test_toydata = ToydataGenerator(cfg, classification=True)
     net_args = {}
 
-    t = Trainer(VGG, train_toydata, test_toydata, cfg)
+    t = Trainer(basenets[cfg.BASE_NET], train_toydata, test_toydata, cfg)
     t.train(net_args)
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ import tensorflow as tf
 import sys, os
 
 from faster_particles.ppn import PPN
-from faster_particles.base_net import VGG
+from faster_particles.base_net import basenets
 from faster_particles import ToydataGenerator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
@@ -126,7 +126,7 @@ def inference(cfg):
     if cfg.NET == 'ppn':
         net = PPN(cfg=cfg)
     elif cfg.NET == 'base':
-        net = VGG(cfg=cfg)
+        net = basenets[cfg.BASE_NET](cfg=cfg)
     net.init_placeholders()
     net.create_architecture(is_training=False)
 

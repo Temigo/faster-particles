@@ -21,6 +21,7 @@ class PPNConfig(object):
     LAMBDA_PPN2 = 0.5
     WEIGHTS_FILE = None # Path to pretrained checkpoint
     NET = 'ppn'
+    BASE_NET = 'vgg'
     MAX_STEPS = 100
     WEIGHT_LOSS = True
 
@@ -78,7 +79,8 @@ class PPNConfig(object):
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
-        parser.add_argument("-n", "--net", default='ppn', type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
+        parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
+        parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, choices=[128, 256, 512], help="Width (and height) of image.")
         parser.add_argument("-mt", "--max-tracks", default=self.MAX_TRACKS, type=int, help="Maximum number of tracks generated per image (uniform distribution).")
         parser.add_argument("-mk", "--max-kinks", default=self.MAX_KINKS, type=int, help="Maximum number of kinks generated for any track.")
