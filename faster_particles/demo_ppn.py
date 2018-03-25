@@ -138,6 +138,7 @@ def inference(cfg):
             blob = toydata.forward()
             summary, results = net.test_image(sess, blob)
             if cfg.NET == 'ppn':
+                #print(blob, results)
                 display(blob, cfg, index=i, **results)
             else:
                 print(blob, results)

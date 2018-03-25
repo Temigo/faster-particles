@@ -24,6 +24,7 @@ class PPNConfig(object):
     BASE_NET = 'vgg'
     MAX_STEPS = 100
     WEIGHT_LOSS = True
+    MIN_SCORE=0.1
 
     # Toydata configuration
     BATCH_SIZE = 20
@@ -96,6 +97,7 @@ class PPNConfig(object):
         parser.add_argument("-kp", "--keep-prob", default=self.SHOWER_KEEP_PROB, type=float, help="")
         parser.add_argument("-nimages", "--shower-n-images", default=self.SHOWER_N_IMAGES, type=int, help="")
         parser.add_argument("-png", "--shower-out-png", default=self.SHOWER_OUT_PNG, action='store_true')
+        parser.add_argument("-ms", "--min-score", default=self.MIN_SCORE, type=float, help="Minimum score above which PPN predictions should be kept")
 
     def parse_args(self):
         args = self.parser.parse_args()

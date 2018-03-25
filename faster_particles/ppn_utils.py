@@ -68,8 +68,13 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
     """
     with tf.variable_scope("predicted_pixels"):
         # Select pixels that contain something
+        #if not classes:
         scores = rpn_cls_prob[:, :, :, 1:]
-        scores = tf.reshape(scores, (-1, rpn_cls_prob.get_shape().as_list()[-1]-1)) # has shape (None, N, N, num_classes - 1)
+        #scores = tf.reshape(scores, (-1, rpn_cls_prob.get_shape().as_list()[-1]-1))
+        #else:
+        #    scores = rpn_cls_prob
+        scores = tf.reshape(scores, (-1, scores.get_shape().as_list()[-1]))
+         # has shape (None, N, N, num_classes - 1)
 
         # Get proposal pixels from regression deltas of rpn_bbox_pred
         #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
@@ -158,52 +163,43 @@ def compute_positives_ppn1(gt_pixels, N3, dim1, dim2):
         classes_mask = tf.cast(classes, tf.bool) # Turn classes into a mask
         return classes_mask
 
-def compute_positives_ppn2(scores, closest_gt_distance, true_labels, threshold=2):
+def compute_positives_ppn2(closest_gt_distance, threshold=2):
     """
     closest_gt_distance shape = (A*N*N, 1)
-    true_labels shape = (A*N*N, 1)
-    scores shape = (A*N*N, num_classes)
     Return boolean mask for positives among proposals.
     Positives are those within certain distance range from the
     closest ground-truth point (of the same class? not for now)
     """
     with tf.variable_scope("ppn2_compute_positives"):
-        pixel_count = tf.shape(true_labels)[0]
+        pixel_count = tf.shape(closest_gt_distance)[0]
         common_shape = tf.stack([pixel_count, 1])
-        #predicted_labels = tf.reshape(tf.argmax(scores, axis=1, output_type=tf.int32), common_shape)
-        #assert predicted_labels.get_shape().as_list()[-1] == 1 and len(predicted_labels.get_shape().as_list()) == 2 # Shape [None, 1]
-        #true_labels = tf.cast(true_labels, tf.int32)
         mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, 0), tf.fill(common_shape, 1))
         mask = mask + tf.scatter_nd([tf.argmin(closest_gt_distance, output_type=tf.int32)], tf.constant([[1]]), common_shape)
         mask = tf.cast(mask, tf.bool)
-        #mask = tf.where(tf.equal(true_labels, predicted_labels), mask, tf.fill(common_shape, False))
         return mask
 
-def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, ppn2=False, rois=None, scores=None):
+def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
     """
     Proposals shape: [A*N*N, 2] (N=16 or 64)
     gt_pixels_placeholder is shape [None, 2+1]
-    Scores shape: [A*N*N, n] where n = 2 or num_classes
-    Rois shape: [A, 2] coordinates in F5 feature map (16x16)
-    Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
     Returns closest ground truth pixels for all pixels and corresponding distance
-    (parenthesis correspond to ppn2 ~ rois is not None)
     -  closest_gt = index of closest gt pixel (of same class)
     - closest_gt_distance = index of closest gt pixel (of same class)
     - closest_gt_label = label of closest gt pixel (regardless of class)
     """
-    if rois is not None and scores is None:
-        raise Exception("Scores cannot be empty if ROIs is not empty")
-
     with tf.variable_scope("assign_gt_pixels"):
         gt_pixels = tf.slice(gt_pixels_placeholder, [0, 0], [-1, 2])
         gt_pixels = tf.expand_dims(gt_pixels, axis=0)
-        if ppn2:
-            gt_pixels = gt_pixels / dim1 # Convert to F3 coordinates
+        # convert proposals to real image coordinates in order to compare with
+        # ground truth pixels coordinates
+        if rois is not None: # means PPN2
+            #gt_pixels = gt_pixels / dim1 # Convert to F3 coordinates
+            proposals = (proposals + dim2 * rois) * dim1
         else:
-            # Tile to have shape (A*N*N, None, 2)
-            gt_pixels = gt_pixels / (dim1 * dim2) # Convert to F5 coordinates
+            #gt_pixels = gt_pixels / (dim1 * dim2) # Convert to F5 coordinates
+            proposals = proposals * dim1 * dim2
 
+        # Tile to have shape (A*N*N, None, 2)
         all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
         all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
 
@@ -233,14 +229,16 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, ppn2=False, r
         proposals = tf.expand_dims(proposals, axis=1)
         distances = tf.sqrt(tf.reduce_sum(tf.pow(proposals - all_gt_pixels, 2), axis=2))
         # distances.shape = [A*N*N, None]
-        if rois is not None:
-            distances = distances + tf.scatter_nd(tf.cast(tf.where(all_gt_pixels_mask), tf.int32), tf.fill((tf.shape(tf.where(all_gt_pixels_mask))[0],), 10000.0), tf.shape(all_gt_pixels_mask))
+        #if rois is not None:
+        #   distances = distances + tf.scatter_nd(tf.cast(tf.where(all_gt_pixels_mask), tf.int32), tf.fill((tf.shape(tf.where(all_gt_pixels_mask))[0],), 10000.0), tf.shape(all_gt_pixels_mask))
 
         # closest_gt.shape = [A*N*N,]
         # closest_gt[i] = indice of closest gt in gt_pixels_placeholder
         closest_gt = tf.argmin(distances, axis=1)
-        closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True)
+        closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True, name="closest_gt_distance")
         #print("squeezed gt_pixels_placeholder shape=", tf.squeeze(tf.slice(gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1).shape)
-        closest_gt_label = tf.nn.embedding_lookup(tf.slice(gt_pixels_placeholder, [0, 2], [-1, 1]), closest_gt)
-        # TODO Assign background label where closest gt pixel is too far away??
-        return closest_gt, closest_gt_distance, closest_gt_label
+        #closest_gt_label = tf.nn.embedding_lookup(tf.slice(gt_pixels_placeholder, [0, 2], [-1, 1]), closest_gt)
+        gt_pixels_labels = tf.slice(gt_pixels_placeholder, [0, 2], [-1, 1])
+        closest_gt_label = tf.gather_nd(gt_pixels_labels, tf.concat([tf.reshape(tf.range(0, tf.shape(closest_gt_distance)[0]), (-1,1)), tf.cast(tf.reshape(closest_gt, (-1, 1)), tf.int32)], axis=1), name="closest_gt_label")
+        print(closest_gt_label.get_shape().as_list())
+        return closest_gt, closest_gt_distance, tf.reshape(closest_gt_label, (-1, 1))
