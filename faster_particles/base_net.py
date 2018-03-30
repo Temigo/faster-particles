@@ -66,7 +66,7 @@ class BaseNet(object):
 
 class VGG(BaseNet):
     def init_placeholders(self):
-        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 3), name="image")
+        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image")
         self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
         return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]

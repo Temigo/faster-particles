@@ -121,7 +121,7 @@ class PPN(object):
         # Define placeholders
         #with tf.variable_scope("placeholders", reuse=self.reuse):
         # FIXME Assuming batch size of 1 currently
-        self.image_placeholder       = tf.placeholder(name="image", shape=(1, self.N, self.N, 3), dtype=tf.float32)
+        self.image_placeholder       = tf.placeholder(name="image", shape=(1, self.N, self.N, 1), dtype=tf.float32)
         # Shape of gt_pixels_placeholder = nb_gt_pixels, 2 coordinates + 1 class label in [0, num_classes)
         self.gt_pixels_placeholder   = tf.placeholder(name="gt_pixels", shape=(None, 3), dtype=tf.float32)
         return [("image_placeholder", "image"), ("gt_pixels_placeholder", "gt_pixels")]

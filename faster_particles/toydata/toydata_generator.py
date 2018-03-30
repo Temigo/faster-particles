@@ -134,7 +134,7 @@ class ToydataGenerator(object):
 
         output = np.maximum(output_showers, output_tracks).reshape([1, self.N, self.N, 1])
 
-        output = np.repeat(output, 3, axis=3) # FIXME VGG needs RGB channels?
+        #output = np.repeat(output, 3, axis=3) # FIXME VGG needs RGB channels?
 
         blob = {}
         #img = np.concatenate([img,img,img],axis=3)

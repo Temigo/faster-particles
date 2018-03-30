@@ -106,7 +106,8 @@ class LarcvGenerator(object):
             # TODO set N from this
             #image_dim = batch_image.dim()
             #image = image.reshape(image_dim[1:3])
-            output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
+            #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
+            output.append(image.reshape([1, self.N, self.N, 1]))
             for pt_index in np.arange(int(len(t_points)/2)):
                 x = t_points[ 2*pt_index     ]
                 y = t_points[ 2*pt_index + 1 ]
@@ -119,7 +120,8 @@ class LarcvGenerator(object):
                 gt_pixels.append([y, x, 2])
 
         # TODO For now we only consider batch size 1
-        output = np.reshape(np.array(output), (1, self.N, self.N, 3))
+        output = np.reshape(np.array(output), (1, self.N, self.N, 1))
+
         blob = {}
         blob['data'] = output.astype(np.float32)
         blob['im_info'] = [1, self.N, self.N, 3]
