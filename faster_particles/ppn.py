@@ -42,7 +42,6 @@ class PPN(object):
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
-        #print(blob['gt_pixels'])
         im_proposals, im_labels, im_scores, rois, summary = sess.run([
             self._predictions['im_proposals'],
             self._predictions['im_labels'],
@@ -142,17 +141,18 @@ class PPN(object):
 
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
+                # FIXME How to combine losses
+                total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
+                            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
+                            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
+                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
+                self._losses['total_loss'] = total_loss
+                tf.summary.scalar('loss', total_loss)
+
                 if self.is_training:
                     tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32), name="ppn1_positives"))
                     tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32), name="ppn2_positives"))
 
-                    # FIXME How to combine losses
-                    total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
-                                + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
-                                + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                                + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
-                    self._losses['total_loss'] = total_loss
-                    tf.summary.scalar('loss', total_loss)
                     tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
                     tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
                     tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
@@ -165,7 +165,7 @@ class PPN(object):
 
                     with tf.variable_scope("optimizer"):
                         global_step = tf.Variable(0, trainable=False, name="global_step")
-                        lr = tf.train.exponential_decay(self.lr, global_step, 1000, 0.95)
+                        lr = tf.train.exponential_decay(self.lr, global_step, 10000, 0.95)
                         optimizer = tf.train.AdamOptimizer(learning_rate=lr)
                         self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 

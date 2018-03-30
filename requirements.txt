@@ -1,4 +1,5 @@
 matplotlib
 numpy
+scikit-learn
 scikit-image
 tensorflow-gpu

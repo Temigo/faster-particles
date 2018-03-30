@@ -2,4 +2,8 @@
 
 from faster_particles.config import cfg
 
-cfg.parse_args()
+def main():
+    cfg.parse_args()
+
+if __name__ == '__main__':
+    main()
