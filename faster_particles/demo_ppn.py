@@ -12,30 +12,40 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import tensorflow as tf
-import sys, os
+import sys, os, subprocess
 
 from faster_particles.ppn import PPN
 from faster_particles.base_net import basenets
 from faster_particles import ToydataGenerator
+from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
 def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
             rois=None, ppn2_proposals=None, ppn2_positives=None, im_labels=None,
-            im_scores=None, ppn2_pixels_pred=None, index=0, name='display'):
+            im_scores=None, ppn2_pixels_pred=None, index=0, dim1=8, dim2=4, name='display'):
     #fig, ax = plt.subplots(1, 1, figsize=(18,18), facecolor='w')
     #ax.imshow(blob['data'][0,:,:,0], interpolation='none', cmap='hot', origin='lower')
     print(im_proposals)
     print(im_scores)
     print(im_labels)
+
+    N = blob['data'].shape[1]
+    N2 = int(N/dim1) # F3 size
+    N3 = int(N2/dim2) # F5 size
+
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')
-    ax.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
-    #for gt_pixel in blob['gt_pixels']:
-    #    if gt_pixel[2] == 1:
-    #        plt.plot([gt_pixel[1]], [gt_pixel[0]], 'ro')
-    #    elif gt_pixel[2] == 2:
-    #        plt.plot([gt_pixel[1]], [gt_pixel[0]], 'go')
+    ax.imshow(blob['data'][0,:,:,0], cmap='jet', interpolation='none', origin='lower')
+    for gt_pixel in blob['gt_pixels']:
+        x, y = gt_pixel[1], gt_pixel[0]
+        #if not cfg.TOYDATA:
+        #    x = gt_pixel[0]
+        #    y = gt_pixel[1]
+        if gt_pixel[2] == 1:
+            plt.plot([x], [y], 'ro')
+        elif gt_pixel[2] == 2:
+            plt.plot([x], [y], 'go')
     """if ppn1_proposals is not None:
         for i in range(len(ppn1_proposals)):
             if ppn1_labels is None or ppn1_labels[i] == 1:
@@ -59,11 +69,15 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     if rois is not None:
         for roi in rois:
             #print(roi[1]*32.0, roi[0]*32.0)
+            x, y = roi[1], roi[0]
+            #if not cfg.TOYDATA:
+            #    x = roi[0]
+            #    y = roi[1]
             ax.add_patch(
                 patches.Rectangle(
-                    (roi[1]*32.0, roi[0]*32.0),
-                    8, # width
-                    8, # height
+                    (x*dim1*dim2, y*dim1*dim2),
+                    dim1, # width
+                    dim1, # height
                     #fill=False,
                     #hatch='\\',
                     facecolor='pink',
@@ -99,17 +113,21 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
 
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal')
-    ax2.imshow(blob['data'][0,:,:,0], cmap='coolwarm', interpolation='none', origin='lower')
+    ax2.imshow(blob['data'][0,:,:,0], cmap='jet', interpolation='none', origin='lower')
 
     if im_proposals is not None and im_scores is not None:
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
             #print(im_labels[i])
             #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
+            x, y = proposal[1], proposal[0]
+            #if not cfg.TOYDATA:
+            #    x = proposal[0]
+            #    y = proposal[1]
             if im_labels[i] == 0: # Track
-                plt.plot([proposal[1]], [proposal[0]], 'yo')
+                plt.plot([x], [y], 'yo')
             elif im_labels[i] == 1: #Shower
-                plt.plot([proposal[1]], [proposal[0]], 'go')
+                plt.plot([x], [y], 'go')
             else:
                 raise Exception("Label unknown")
     ax2.set_xlim(0, cfg.IMAGE_SIZE)
@@ -117,11 +135,19 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
 
+def get_filelist(ls_command):
+    filelist = subprocess.Popen([ls_command], shell=True, stdout=subprocess.PIPE).stdout
+    return str(filelist.read().splitlines()).replace('\'', '\"').replace(" ", "")
+
 def inference(cfg):
     if cfg.NET == 'ppn':
-        toydata = ToydataGenerator(cfg)
+        if cfg.TOYDATA:
+            data = ToydataGenerator(cfg)
+        else:
+            filelist = get_filelist("ls /data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root")
+            data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
     else:
-        toydata = ToydataGenerator(cfg, classification=True)
+        data = ToydataGenerator(cfg, classification=True)
 
     if cfg.NET == 'ppn':
         net = PPN(cfg=cfg)
@@ -135,11 +161,11 @@ def inference(cfg):
     with tf.Session() as sess:
         saver.restore(sess, cfg.WEIGHTS_FILE)
         for i in range(10):
-            blob = toydata.forward()
+            blob = data.forward()
             summary, results = net.test_image(sess, blob)
             if cfg.NET == 'ppn':
                 #print(blob, results)
-                display(blob, cfg, index=i, **results)
+                display(blob, cfg, index=i, dim1=net.dim1, dim2=net.dim2, **results)
             else:
                 print(blob, results)
 

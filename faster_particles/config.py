@@ -7,7 +7,7 @@ os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
 class PPNConfig(object):
-    IMAGE_SIZE = 512
+    IMAGE_SIZE = 768 # 512
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
@@ -23,12 +23,13 @@ class PPNConfig(object):
     NET = 'ppn'
     BASE_NET = 'vgg'
     MAX_STEPS = 100
-    WEIGHT_LOSS = True
-    MIN_SCORE=0.1
+    WEIGHT_LOSS = True # FIXME make it False by default
+    MIN_SCORE=0.0
 
-    # Toydata configuration
-    BATCH_SIZE = 20
+    # Data configuration
+    BATCH_SIZE = 1
     SEED = 123
+    TOYDATA = False
 
     # Track configuration
     MAX_TRACKS = 5
@@ -37,6 +38,7 @@ class PPNConfig(object):
     KINKS = None
 
     # Shower configuration
+    MAX_SHOWERS = 5
     SHOWER_N_LINES = 10
     SHOWER_DTHETA = -1
     SHOWER_L_MIN = 40
@@ -80,6 +82,7 @@ class PPNConfig(object):
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
+        parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
         parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, choices=[128, 256, 512], help="Width (and height) of image.")
@@ -89,6 +92,7 @@ class PPNConfig(object):
         parser.add_argument("-b", "--batch-size", default=self.BATCH_SIZE, type=int, help="Batch size")
         parser.add_argument("-s", "--seed", default=self.SEED, type=int, help="Random seed")
         parser.add_argument("-k", "--kinks", default=self.KINKS, type=int, help="Exact number of kinks to be generated for every track.")
+        parser.add_argument("-maxs", "--max-showers", default=self.MAX_SHOWERS, type=int, help="Maximum number of showers generated per image (uniform distribution).")
         parser.add_argument("-snl", "--shower-n-lines", default=self.SHOWER_N_LINES, type=int, help="Number of lines generated per shower.")
         parser.add_argument("-sdt", "--shower-dtheta", default=self.SHOWER_DTHETA, type=float, help="Dtheta for shower generation.")
         parser.add_argument("-slmin", "--shower-l-min", default=self.SHOWER_L_MIN, type=float, help="Minimum length of line for shower generation.")

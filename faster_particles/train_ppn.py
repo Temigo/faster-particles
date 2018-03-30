@@ -12,7 +12,9 @@ import sys, os
 
 from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator
-from faster_particles.demo_ppn import display
+#from faster_particles import LarcvGenerator
+from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
+from faster_particles.demo_ppn import display, get_filelist
 from faster_particles.base_net import basenets
 #from config import cfg
 
@@ -96,11 +98,18 @@ class Trainer(object):
 
 def train_ppn(cfg):
     # Define data generators
-    train_toydata = ToydataGenerator(cfg)
-    test_toydata = ToydataGenerator(cfg)
+    if cfg.TOYDATA:
+        train_data = ToydataGenerator(cfg)
+        test_data = ToydataGenerator(cfg)
+    else:
+        #filelist = get_filelist("ls /data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root")
+        filelist = '["/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root"]'
+        train_data = LarcvGenerator(cfg, ioname="train", filelist=filelist)
+        test_data = LarcvGenerator(cfg, ioname="test", filelist=filelist)
+
     net_args = {"base_net": basenets[cfg.BASE_NET], "base_net_args": {}}
 
-    t = Trainer(PPN, train_toydata, test_toydata, cfg, display_util=display)
+    t = Trainer(PPN, train_data, test_data, cfg, display_util=display)
     t.train(net_args)
 
 def train_classification(cfg):
@@ -115,4 +124,4 @@ def train_classification(cfg):
 if __name__ == '__main__':
     #train_ppn(cfg)
     #train_classification(cfg)
-    pass
+    print(get_filelist("ls /data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"))

@@ -6,8 +6,10 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+from scipy.misc import imresize
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import sys
 from faster_particles.toydata.track_generator import generate_toy_tracks
 from faster_particles.toydata.shower_generator import make_shower
@@ -25,6 +27,7 @@ class ToydataGenerator(object):
         self.kinks = cfg.KINKS
 
         # Shower options
+        self.max_showers = cfg.MAX_SHOWERS
         self.cfg = cfg
         self.gt_box_padding = 5
         self.batch_size = cfg.BATCH_SIZE
@@ -34,7 +37,28 @@ class ToydataGenerator(object):
         np.random.seed(cfg.SEED)
 
     def num_classes(self):
-        return 3
+        return 4
+
+    def make_showers(self):
+        output_showers, shower_start_points, angle = np.zeros((self.N, self.N)), [], []
+        for i in range(np.random.randint(self.max_showers)):
+            scale = np.random.uniform(0.3, 1.0)
+            output_showers_i, shower_start_points_i, angle_i = make_shower(self.cfg)
+            shower_image = imresize(output_showers_i, scale)
+            #print(shower_image.shape, scale)
+            #print(shower_image)
+            #plt.imshow(shower_image)
+            #plt.savefig(self.cfg.DISPLAY_DIR + "/shower%d.png" % i)
+            before_1 = np.random.randint(self.cfg.IMAGE_SIZE - shower_image.shape[0])
+            after_1 = self.cfg.IMAGE_SIZE - before_1 - shower_image.shape[0]
+            before_2 = np.random.randint(self.cfg.IMAGE_SIZE - shower_image.shape[1])
+            after_2 = self.cfg.IMAGE_SIZE - before_2 - shower_image.shape[1]
+            #print(before_1, after_1, before_2, after_2)
+            output_showers = output_showers + np.pad(shower_image, ((before_1, after_1), (before_2, after_2)), 'constant', constant_values=0)
+            shower_start_points.append((int(shower_start_points_i[0]*scale) + before_1, int(shower_start_points_i[1]*scale) + before_2))
+            angle.append(angle_i)
+
+        return np.clip(output_showers, 0, 1), shower_start_points, angle
 
     def forward(self):
         track_length = 0.0
@@ -53,7 +77,7 @@ class ToydataGenerator(object):
                     kinks = len(track_start_points)
                     track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
                 else:
-                    output_showers, shower_start_points, angle = make_shower(self.cfg)
+                    output_showers, shower_start_points, angle = self.make_showers()
                     output_tracks = np.zeros((self.N, self.N))
                     track_edges = []
                     image_label = 2 # shower image
@@ -71,7 +95,7 @@ class ToydataGenerator(object):
                 track_length = np.sqrt(np.power(track_start_points[0][0]-track_end_points[0][0], 2) + np.power(track_start_points[0][1] - track_end_points[0][1], 2))
 
         else:
-            output_showers, shower_start_points, angle = make_shower(self.cfg)
+            output_showers, shower_start_points, angle = self.make_showers()
             output_tracks, track_start_points, track_end_points = generate_toy_tracks(self.N, self.max_tracks, max_kinks=self.max_kinks, max_track_length=self.max_track_length, padding=self.gt_box_padding)
             # start and end are ill-defined without charge gradient
             track_edges = track_start_points + track_end_points
@@ -83,13 +107,14 @@ class ToydataGenerator(object):
         # find bbox for shower
         # FIXME what happens if output_showers is empty ?
         if shower_start_points:
-            bbox_labels.append([shower_start_points[0]-self.gt_box_padding,
-                                shower_start_points[1]-self.gt_box_padding,
-                                shower_start_points[0]+self.gt_box_padding,
-                                shower_start_points[1]+self.gt_box_padding,
-                                2]) # 2 for shower_start
-            simple_labels.append([2])
-            gt_pixels.append([shower_start_points[0], shower_start_points[1], 2])
+            for i in range(len(shower_start_points)):
+                bbox_labels.append([shower_start_points[i][0]-self.gt_box_padding,
+                                    shower_start_points[i][1]-self.gt_box_padding,
+                                    shower_start_points[i][0]+self.gt_box_padding,
+                                    shower_start_points[i][1]+self.gt_box_padding,
+                                    2]) # 2 for shower_start
+                simple_labels.append([2])
+                gt_pixels.append([shower_start_points[i][0], shower_start_points[i][1], 2])
             simple_label = 2
             opening_angle = angle
 
@@ -109,7 +134,6 @@ class ToydataGenerator(object):
 
         output = np.maximum(output_showers, output_tracks).reshape([1, self.N, self.N, 1])
 
-        #output = output[np.newaxis,:,:,np.newaxis]
         output = np.repeat(output, 3, axis=3) # FIXME VGG needs RGB channels?
 
         blob = {}
@@ -119,7 +143,7 @@ class ToydataGenerator(object):
         blob['gt_boxes'] = np.array(bbox_labels)
         # Ji Won
         blob['class_labels'] = np.array([[simple_label]])
-        blob['angles'] = np.array([[opening_angle]])
+        blob['angles'] = np.array([opening_angle])
         # Laura
         blob['gt_labels'] = np.array(simple_labels)
         blob['gt_pixels'] = np.array(gt_pixels)

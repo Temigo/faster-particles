@@ -139,6 +139,7 @@ class PPN(object):
             raise Exception("Layers dimensions are incompatibles.")
         self.dim1 = int(self.N/self.N2)
         self.dim2 = int(self.N2/self.N3)
+        print("N2 = %d ; N3 = %d ; dim1 = %d ; dim2 = %d" % (self.N2, self.N3, self.dim1, self.dim2))
 
     def create_architecture(self, is_training=True, reuse=None, scope="ppn"):
         self.is_training = is_training
@@ -425,7 +426,10 @@ class PPN(object):
                 loss_ppn2_track = tf.cond(tf.equal(tf.shape(track_indices)[0], tf.constant(0)), false_fn=lambda: tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2_track, logits=logits_track))), true_fn=lambda: 0.0)
                 loss_ppn2_shower = tf.cond(tf.equal(tf.shape(shower_indices)[0], tf.constant(0)), false_fn=lambda: tf.reduce_mean(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2_shower, logits=logits_shower))), true_fn=lambda: 0.0)
 
-                loss_ppn2_class = loss_ppn2_background + loss_ppn2_track + loss_ppn2_shower
+                gt_labels = tf.slice(self.gt_pixels_placeholder, [0, 2], [-1, 1])
+                nb_tracks = tf.reduce_sum(tf.cast(tf.equal(gt_labels, 1), tf.float32))
+                nb_showers = tf.reduce_sum(tf.cast(tf.equal(gt_labels, 2), tf.float32))
+                loss_ppn2_class = loss_ppn2_background + nb_tracks / (nb_tracks + nb_showers) * loss_ppn2_track + nb_showers / (nb_tracks + nb_showers) * loss_ppn2_shower
             else:
                 loss_ppn2_class = tf.reduce_mean(tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_ppn2, logits=logits)))
 
