@@ -9,22 +9,24 @@ def generate_anchors(width, height, repeat=1):
     Generate anchors = centers of pixels.
     Repeat ~ batch size.
     """
-    anchors = np.indices((width, height)).transpose((1, 2, 0))
-    anchors = anchors + 0.5
-    anchors = tf.reshape(tf.constant(anchors, dtype=tf.float32), (-1, 2))
-    return tf.tile(anchors, tf.stack([repeat, 1]))
+    with tf.variable_scope("generate_anchors"):
+        anchors = np.indices((width, height)).transpose((1, 2, 0))
+        anchors = anchors + 0.5
+        anchors = tf.reshape(tf.constant(anchors, dtype=tf.float32), (-1, 2))
+        return tf.tile(anchors, tf.stack([repeat, 1]), name="anchors")
 
 def clip_pixels(pixels, im_shape):
     """
     pixels shape: [None, 2]
     Clip pixels (x, y) to [0, im_shape[0]) x [0, im_shape[1])
     """
-    pixels_x = tf.slice(pixels, [0, 0], [-1, 1])
-    pixels_y = tf.slice(pixels, [0, 1], [-1, 1])
-    pixels_x = tf.clip_by_value(pixels_x, 0, im_shape[0])
-    pixels_y = tf.clip_by_value(pixels_y, 0, im_shape[1])
-    pixels = tf.concat([pixels_x, pixels_y], axis=1)
-    return pixels
+    with tf.variable_scope("clip_pixels"):
+        pixels_x = tf.slice(pixels, [0, 0], [-1, 1])
+        pixels_y = tf.slice(pixels, [0, 1], [-1, 1])
+        pixels_x = tf.clip_by_value(pixels_x, 0, im_shape[0])
+        pixels_y = tf.clip_by_value(pixels_y, 0, im_shape[1])
+        pixels = tf.concat([pixels_x, pixels_y], axis=1)
+        return pixels
 
 def pixels_transform_inv(pixels, deltas):
     # Given an anchor pixel and regression deltas, estimate proposal pixel
@@ -83,35 +85,36 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20, class
         proposals = tf.reshape(proposals, (-1, 2))
         # clip predicted pixels to the image
         proposals = clip_pixels(proposals, im_shape)
-        rois = tf.cast(proposals, tf.float32)
+        rois = tf.cast(proposals, tf.float32, name="rois")
         return rois, scores
 
 def slice_rois(rois, dim2):
     """
     Transform ROI (1 pixel on F5) into 4x4 ROIs on F3 (using F5 coordinates)
     """
-    rois_x = tf.slice(rois, [0, 0], [-1, 1]) * dim2
-    rois_y = tf.slice(rois, [0, 1], [-1, 1]) * dim2
-    rois = tf.concat([
-        tf.concat([rois_x, rois_y], axis=1),
-        tf.concat([rois_x, rois_y+1], axis=1),
-        tf.concat([rois_x, rois_y-1], axis=1),
-        tf.concat([rois_x, rois_y-2], axis=1),
-        tf.concat([rois_x+1, rois_y], axis=1),
-        tf.concat([rois_x+1, rois_y+1], axis=1),
-        tf.concat([rois_x+1, rois_y-1], axis=1),
-        tf.concat([rois_x+1, rois_y-2], axis=1),
-        tf.concat([rois_x-1, rois_y], axis=1),
-        tf.concat([rois_x-1, rois_y+1], axis=1),
-        tf.concat([rois_x-1, rois_y-1], axis=1),
-        tf.concat([rois_x-1, rois_y-2], axis=1),
-        tf.concat([rois_x-2, rois_y], axis=1),
-        tf.concat([rois_x-2, rois_y+1], axis=1),
-        tf.concat([rois_x-2, rois_y-1], axis=1),
-        tf.concat([rois_x-2, rois_y-2], axis=1),
-    ], axis=0)
-    rois = rois / dim2
-    return rois
+    with tf.variable_scope("slice_rois"):
+        rois_x = tf.slice(rois, [0, 0], [-1, 1], name="rois_x") * dim2
+        rois_y = tf.slice(rois, [0, 1], [-1, 1], name="rois_y") * dim2
+        rois = tf.concat([
+            tf.concat([rois_x, rois_y], axis=1),
+            tf.concat([rois_x, rois_y+1], axis=1),
+            tf.concat([rois_x, rois_y-1], axis=1),
+            tf.concat([rois_x, rois_y-2], axis=1),
+            tf.concat([rois_x+1, rois_y], axis=1),
+            tf.concat([rois_x+1, rois_y+1], axis=1),
+            tf.concat([rois_x+1, rois_y-1], axis=1),
+            tf.concat([rois_x+1, rois_y-2], axis=1),
+            tf.concat([rois_x-1, rois_y], axis=1),
+            tf.concat([rois_x-1, rois_y+1], axis=1),
+            tf.concat([rois_x-1, rois_y-1], axis=1),
+            tf.concat([rois_x-1, rois_y-2], axis=1),
+            tf.concat([rois_x-2, rois_y], axis=1),
+            tf.concat([rois_x-2, rois_y+1], axis=1),
+            tf.concat([rois_x-2, rois_y-1], axis=1),
+            tf.concat([rois_x-2, rois_y-2], axis=1),
+        ], axis=0, name="sliced_rois")
+        rois = rois / dim2
+        return rois
 
 def include_gt_pixels(rois, gt_pixels, dim1, dim2):
     """
@@ -121,28 +124,29 @@ def include_gt_pixels(rois, gt_pixels, dim1, dim2):
     gt_pixels: shape (None, 2)
     Return rois in F5 coordinates (round coordinates for rois, float for gt rois)
     """
-    # convert to F3 coordinates
-    gt_pixels_coord = tf.cast(tf.floor(gt_pixels / dim1), tf.float32)
-    # Get 3x3 pixels around this in F3
-    gt_pixels_coord = tf.expand_dims(gt_pixels_coord, axis=1)
-    #gt_pixels_coord = tf.transpose(gt_pixels_coord, perms=[0, 2, 1])
-    gt_pixels_coord = tf.tile(gt_pixels_coord, [1, 9, 1]) # shape N x 9 x 2
-    # FIXME clip to image
-    update = tf.constant([[0, 0], [0, 1], [0, -1], [1, 0], [1, 1], [1, -1], [-1, 0], [-1, 1], [-1, -1]], dtype=tf.float32)
-    update = tf.tile(tf.expand_dims(update, axis=0), [tf.shape(gt_pixels_coord)[0], 1, 1])
-    gt_pixels_coord = gt_pixels_coord + update
-    gt_pixels_coord = tf.reshape(gt_pixels_coord, (-1, 2)) # Shape N*9, 2
-    # FIXME Clip it to F3 size
-    # indices = tf.where(tf.less(gt_pixels_coord, 64))
-    # gt_pixels_coord = tf.gather_nd(gt_pixels_coord, indices)
-    # Go back to F5 coordinates
-    gt_pixels_coord = gt_pixels_coord / dim2
-    # FIXME As soon as new version of Tensorflow supporting axis option
-    # for tf.unique, replace the following rough patch.
-    # In the meantime, we will have some duplicates between rois and gt_pixels.
-    rois = tf.concat([rois, gt_pixels_coord], axis=0) # shape [None, 2]
-    assert rois.get_shape().as_list()[-1] == 2 and len(rois.get_shape().as_list()) == 2 # Shape [None, 2]
-    return rois
+    with tf.variable_scope("include_gt_pixels"):
+        # convert to F3 coordinates
+        gt_pixels_coord = tf.cast(tf.floor(gt_pixels / dim1), tf.float32)
+        # Get 3x3 pixels around this in F3
+        gt_pixels_coord = tf.expand_dims(gt_pixels_coord, axis=1)
+        #gt_pixels_coord = tf.transpose(gt_pixels_coord, perms=[0, 2, 1])
+        gt_pixels_coord = tf.tile(gt_pixels_coord, [1, 9, 1]) # shape N x 9 x 2
+        # FIXME clip to image
+        update = tf.constant([[0, 0], [0, 1], [0, -1], [1, 0], [1, 1], [1, -1], [-1, 0], [-1, 1], [-1, -1]], dtype=tf.float32)
+        update = tf.tile(tf.expand_dims(update, axis=0), [tf.shape(gt_pixels_coord)[0], 1, 1])
+        gt_pixels_coord = gt_pixels_coord + update
+        gt_pixels_coord = tf.reshape(gt_pixels_coord, (-1, 2)) # Shape N*9, 2
+        # FIXME Clip it to F3 size
+        # indices = tf.where(tf.less(gt_pixels_coord, 64))
+        # gt_pixels_coord = tf.gather_nd(gt_pixels_coord, indices)
+        # Go back to F5 coordinates
+        gt_pixels_coord = gt_pixels_coord / dim2
+        # FIXME As soon as new version of Tensorflow supporting axis option
+        # for tf.unique, replace the following rough patch.
+        # In the meantime, we will have some duplicates between rois and gt_pixels.
+        rois = tf.concat([rois, gt_pixels_coord], axis=0, name="rois") # shape [None, 2]
+        assert rois.get_shape().as_list()[-1] == 2 and len(rois.get_shape().as_list()) == 2 # Shape [None, 2]
+        return rois
 
 def compute_positives_ppn1(gt_pixels, N3, dim1, dim2):
     """
@@ -160,7 +164,7 @@ def compute_positives_ppn1(gt_pixels, N3, dim1, dim2):
         #classes = classes + tf.scatter_nd(gt_pixels, tf.constant(value=1.0, shape=tf.shape(gt_pixels)[0]), classes.shape)
         classes = classes + tf.scatter_nd(gt_pixels, tf.fill((tf.shape(gt_pixels)[0],), 1.0), classes.shape)
         classes = tf.cast(tf.reshape(classes, shape=(-1, 1)), tf.int32)
-        classes_mask = tf.cast(classes, tf.bool) # Turn classes into a mask
+        classes_mask = tf.cast(classes, tf.bool, name="ppn1_mask") # Turn classes into a mask
         return classes_mask
 
 def compute_positives_ppn2(closest_gt_distance, threshold=2):
@@ -175,7 +179,7 @@ def compute_positives_ppn2(closest_gt_distance, threshold=2):
         common_shape = tf.stack([pixel_count, 1])
         mask = tf.where(tf.greater(closest_gt_distance, threshold), tf.fill(common_shape, 0), tf.fill(common_shape, 1))
         mask = mask + tf.scatter_nd([tf.argmin(closest_gt_distance, output_type=tf.int32)], tf.constant([[1]]), common_shape)
-        mask = tf.cast(mask, tf.bool)
+        mask = tf.cast(mask, tf.bool, name="ppn2_mask")
         return mask
 
 def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):

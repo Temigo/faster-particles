@@ -82,7 +82,9 @@ class LarcvGenerator(object):
 
         self.proc = larcv_threadio()
         self.proc.configure(dataloader_cfg)
+        #self.proc.set_next_index(10345)
         self.proc.start_manager(self.batch_size)
+
 
     def __delete__(self):
         self.proc.stop_manager()
@@ -107,7 +109,7 @@ class LarcvGenerator(object):
             #image_dim = batch_image.dim()
             #image = image.reshape(image_dim[1:3])
             #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
-            output.append(image.reshape([1, self.N, self.N, 1]))
+
             for pt_index in np.arange(int(len(t_points)/2)):
                 x = t_points[ 2*pt_index     ]
                 y = t_points[ 2*pt_index + 1 ]
@@ -118,6 +120,12 @@ class LarcvGenerator(object):
                 y = s_points[ 2*pt_index + 1 ]
                 if x < 0: break
                 gt_pixels.append([y, x, 2])
+            if len(gt_pixels) > 0:
+                output.append(image.reshape([1, self.N, self.N, 1]))
+
+        if len(output) == 0: # No gt pixels in this batch - try next batch
+            print("DUMP")
+            return self.forward()
 
         # TODO For now we only consider batch size 1
         output = np.reshape(np.array(output), (1, self.N, self.N, 1))
