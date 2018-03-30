@@ -1,9 +1,14 @@
 # faster-particles
 
-* Generate toy dataset
+* Toydata generator
+* LArCV data interface
 * Pixel Proposal Network implementation using Tensorflow
 
 ## Installation
+Dependencies:
+* [larcv2](https://github.com/DeepLearnPhysics/larcv2) and its own dependencies (ROOT, etc)
+in order to use LArCV data interface.
+
 With Pip [to be released soon]:
 ```bash
 pip install faster-particles
