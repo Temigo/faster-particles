@@ -154,7 +154,7 @@ def display(blob, cfg, im_proposals=None, ppn1_proposals=None, ppn1_labels=None,
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
 
-def statistics(im_proposals, im_labels, im_scores):
+def statistics(cfg, im_proposals, im_labels, im_scores):
     track_scores = []
     shower_scores = []
     for i in range(len(im_scores)):
@@ -169,10 +169,10 @@ def statistics(im_proposals, im_labels, im_scores):
     plt.legend(loc='upper right')
     plt.xlabel("Score")
     plt.ylabel("#Proposals")
-    plt.savefig('display/scores.png')
+    plt.savefig(os.path.join(cfg.DISPLAY_DIR, 'scores.png'))
 
 def get_filelist(ls_command):
-    filelist = subprocess.Popen([ls_command], shell=True, stdout=subprocess.PIPE).stdout
+    filelist = subprocess.Popen(["ls %s" % ls_command], shell=True, stdout=subprocess.PIPE).stdout
     return str(filelist.read().splitlines()).replace('\'', '\"').replace(" ", "")
 
 def inference(cfg):
@@ -180,7 +180,7 @@ def inference(cfg):
         if cfg.TOYDATA:
             data = ToydataGenerator(cfg)
         else:
-            filelist = get_filelist("ls /data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root")
+            filelist = get_filelist(cfg.DATA)
             data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
     else:
         data = ToydataGenerator(cfg, classification=True)
@@ -207,7 +207,7 @@ def inference(cfg):
                 display(blob, cfg, index=i, dim1=net.dim1, dim2=net.dim2, **results)
             else:
                 print(blob, results)
-    statistics(im_proposals, im_labels, im_scores)
+    statistics(cfg, im_proposals, im_labels, im_scores)
 
 
 if __name__ == '__main__':

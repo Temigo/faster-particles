@@ -1,19 +1,21 @@
-from distutils.core import setup
+#from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(
     name='faster-particles',
-    version='0.1.0',
+    version='0.1.6',
     author='Laura Domine, Ji Won Park, Kazuhiro Terao',
     author_email='temigo@gmx.com',
-    packages=['faster_particles', 'faster_particles.test', 'faster_particles.toydata', 'faster_particles.larcvdata'],
+    packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'ppn=bin.ppn:main'
+            'ppn=faster_particles.bin.ppn:main'
         ],
     },
     license='LICENSE.md',
     description='Point Proposal Network for particles images and related tools.',
     long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     url='https://github.com/Temigo/faster-particles',
     install_requires=[
         "matplotlib >= 1.5.3",

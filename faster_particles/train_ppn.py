@@ -102,8 +102,7 @@ def train_ppn(cfg):
         train_data = ToydataGenerator(cfg)
         test_data = ToydataGenerator(cfg)
     else:
-        #filelist = get_filelist("ls /data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root")
-        filelist = '["/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root"]'
+        filelist = get_filelist(cfg.DATA)
         train_data = LarcvGenerator(cfg, ioname="train", filelist=filelist)
         test_data = LarcvGenerator(cfg, ioname="test", filelist=filelist)
 

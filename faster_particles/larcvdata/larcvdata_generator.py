@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import sys
 
 import ROOT
+# PyROOT hijacks help option otherwise
+ROOT.PyConfig.IgnoreCommandLineOptions = True
 from larcv import larcv
 larcv.ThreadProcessor
 from larcv.dataloader2 import larcv_threadio
