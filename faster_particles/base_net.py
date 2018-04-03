@@ -15,6 +15,7 @@ class BaseNet(object):
         self.N = cfg.IMAGE_SIZE
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = 0.001
+        self.is_3d = cfg.DATA_3D
 
     def init_placeholders(self):
         """
@@ -66,7 +67,10 @@ class BaseNet(object):
 
 class VGG(BaseNet):
     def init_placeholders(self):
-        self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image")
+        if self.is_3d:
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image")
+        else:
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image")
         self.labels_placeholder = tf.placeholder(tf.int32, shape=(None, 1), name="labels")
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
         return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]
@@ -92,27 +96,33 @@ class VGG(BaseNet):
         with tf.variable_scope("vgg_16", reuse=reuse):
             weights_regularizer = tf.contrib.layers.l2_regularizer(0.0005)
             biases_regularizer = tf.no_regularizer
-            with slim.arg_scope([slim.conv2d, slim.fully_connected],
+            conv = slim.conv2d
+            max_pool = slim.max_pool2d
+            if self.is_3d:
+                conv = slim.conv3d
+                max_pool = slim.max_pool3d
+
+            with slim.arg_scope([conv, slim.fully_connected],
                                 normalizer_fn=slim.batch_norm,
                                 trainable=is_training,
                                 weights_regularizer=weights_regularizer,
                                 biases_regularizer=biases_regularizer,
                                 biases_initializer=tf.constant_initializer(0.0)):
-                net = slim.repeat(image_placeholder, 2, slim.conv2d, 64, [3, 3],
+                net = slim.repeat(image_placeholder, 2, conv, 64, [3, 3],
                                   trainable=is_training, scope='conv1')
-                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
-                net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3],
+                net = max_pool(net, [2, 2], padding='SAME', scope='pool1')
+                net = slim.repeat(net, 2, conv, 128, [3, 3],
                                 trainable=is_training, scope='conv2')
-                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
-                net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3],
+                net = max_pool(net, [2, 2], padding='SAME', scope='pool2')
+                net = slim.repeat(net, 3, conv, 256, [3, 3],
                                 trainable=is_training, scope='conv3')
-                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
-                net2 = slim.repeat(net, 3, slim.conv2d, 512, [3, 3],
+                net = max_pool(net, [2, 2], padding='SAME', scope='pool3')
+                net2 = slim.repeat(net, 3, conv, 512, [3, 3],
                                 trainable=is_training, scope='conv4')
-                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool4')
-                net2 = slim.repeat(net2, 3, slim.conv2d, 512, [3, 3],
+                net2 = max_pool(net2, [2, 2], padding='SAME', scope='pool4')
+                net2 = slim.repeat(net2, 3, conv, 512, [3, 3],
                                 trainable=is_training, scope='conv5')
-                net2 = slim.max_pool2d(net2, [2, 2], padding='SAME', scope='pool5')
+                net2 = max_pool(net2, [2, 2], padding='SAME', scope='pool5')
                 # After 5 times (2, 2) pooling, if input image is 512x512
                 # the feature map should be spatial dimensions 16x16.
             return net, net2
