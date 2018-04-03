@@ -32,6 +32,7 @@ class PPNConfig(object):
     TOYDATA = False
     # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
     DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root"
+    DATA_3D = False
 
     # Track configuration
     MAX_TRACKS = 5
@@ -84,6 +85,7 @@ class PPNConfig(object):
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
+        parser.add_argument("-3d", "--data-3d", default=self.DATA_3D, action='store_true', help="Use 3D instead of 2D.")
         parser.add_argument("-data", "--data", default=self.DATA, type=str, help="Path to data files. Can use ls regex format.")
         parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
