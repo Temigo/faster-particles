@@ -41,6 +41,7 @@ def top_R_pixels(proposals, scores, R=20, threshold=0.5):
     Shapes are [N*N, 2] and [N*N, 1]
     """
     with tf.variable_scope("top_R_pixels"):
+        print("scores ", scores.get_shape().as_list())
         # Select top R pixel proposals
         flat_scores = tf.squeeze(scores) # shape N*N
         R = min(R, flat_scores.get_shape().as_list()[0])
@@ -72,14 +73,19 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20):
     """
     with tf.variable_scope("predicted_pixels"):
         # Select pixels that contain something
-        scores = rpn_cls_prob[:, :, :, 1:]
+        scores = rpn_cls_prob[..., 1:]
         scores = tf.reshape(scores, (-1, scores.get_shape().as_list()[-1]))
          # has shape (None, N, N, num_classes - 1)
         dim = anchors.get_shape().as_list()[-1]
+        N = rpn_cls_prob.get_shape().as_list()[1]
+        print(rpn_bbox_pred.get_shape().as_list(), rpn_cls_prob.get_shape().as_list())
+        print(rpn_cls_prob.get_shape().as_list()[1:-1])
         # Get proposal pixels from regression deltas of rpn_bbox_pred
         #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
-        anchors = tf.reshape(anchors, shape=tf.stack([-1] + tf.shape(rpn_cls_prob)[1:-1] + [dim]))
+        anchors = tf.reshape(anchors, shape=tf.stack([-1] + [N] * dim + [dim]))
+        print(anchors.get_shape().as_list())
         proposals =  anchors + rpn_bbox_pred
+        print(proposals.get_shape().as_list())
         proposals = tf.reshape(proposals, (-1, dim))
         # clip predicted pixels to the image
         proposals = clip_pixels(proposals, im_shape)
@@ -200,7 +206,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
         # Tile to have shape (A*N*N, None, 2)
         all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
         all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
-        assert all_gt_pixels.get_shape().as_list() == [None, None, 2]
+        assert all_gt_pixels.get_shape().as_list() == [None, None, dim]
         # Reshape proposals to [A*N*N, 1, 2]
         proposals = tf.expand_dims(proposals, axis=1)
         distances = tf.sqrt(tf.reduce_sum(tf.pow(proposals - all_gt_pixels, 2), axis=2))
@@ -218,7 +224,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
         closest_gt_label = tf.gather_nd(gt_pixels_labels, tf.concat([tf.reshape(tf.range(0, tf.shape(closest_gt_distance)[0]), (-1,1)), tf.cast(tf.reshape(closest_gt, (-1, 1)), tf.int32)], axis=1), name="closest_gt_label")
         return closest_gt, closest_gt_distance, tf.reshape(closest_gt_label, (-1, 1))
 
-def crop_pool_layer(net, rois, dim2):
+def crop_pool_layer(net, rois, dim2, dim):
     """
     Crop and pool intermediate F3 layer.
     Net.shape = [1, 64, 64, 256]
@@ -226,7 +232,13 @@ def crop_pool_layer(net, rois, dim2):
     Also assumes ROIs are 1x1 pixels on F3
     """
     with tf.variable_scope("crop_pool_layer"):
-        dim = rois.get_shape().as_list()[-1]
         # Convert rois from F5 coordinates to F3 coordinates (x4)
         rois = tf.cast(rois * dim2, tf.int32) # FIXME 3x3 float coordinates for gt pixel inducted positives
-        return tf.slice(net, rois, tf.fill([tf.shape(rois)[0]]*dim, dim2))
+        #print("rois before gather_nd", rois.get_shape().as_list())
+        #print("net", net.get_shape().as_list())
+        nb_channels = net.get_shape().as_list()[-1]
+        indices = tf.concat([tf.fill([tf.shape(rois)[0], 1], 0), rois], axis=1)
+        #print(indices.get_shape().as_list())
+        rois = tf.gather_nd(net, indices, name="crop_layer")
+        #print(rois.get_shape().as_list())
+        return tf.reshape(rois, (-1,) + (1,) * dim + (nb_channels,))

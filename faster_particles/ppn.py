@@ -144,13 +144,13 @@ class PPN(object):
                     # During training time, check if all ground truth pixels are covered by ROIs
                     # If not, add relevant ROIs on F3
                     rois = include_gt_pixels(rois, self.get_gt_pixels(), self.dim1, self.dim2)
-                    assert rois.get_shape().as_list() == [None, 2]
+                    assert rois.get_shape().as_list() == [None, self.dim]
 
                 self._predictions['rois'] = rois
 
                 # Pool to Pixels of Interest of intermediate layer
                 # Shape of rpn_pooling = nb_rois, 1, 1, 256
-                rpn_pooling = crop_pool_layer(net, rois, self.dim2)
+                rpn_pooling = crop_pool_layer(net, rois, self.dim2, self.dim)
 
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
@@ -215,13 +215,13 @@ class PPN(object):
             # Shape of ppn1 = 1, 16, 16, 512
             ppn1 = self.conv(net2,
                               512, # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels
+                              3, # RPN Kernels
                               weights_initializer=initializer,
                               trainable=self.is_training,
                               scope="ppn1_conv/3x3")
             # Step 1-a) PPN 2 pixel position predictions
             # Shape of ppn1_pixel_pred = 1, 16, 16, 2
-            ppn1_pixel_pred = self.conv(ppn1, 2, [1, 1],
+            ppn1_pixel_pred = self.conv(ppn1, self.dim, 1,
                                         weights_initializer=initializer,
                                         trainable=self.is_training,
                                         padding='VALID',
@@ -229,7 +229,7 @@ class PPN(object):
                                         scope='ppn1_pixel_pred')
             # Step 1-b) Generate 2 class scores (background vs signal)
             # Shape of ppn1_cls_score = 1, 16, 16, 2
-            ppn1_cls_score = self.conv(ppn1, 2, [1, 1],
+            ppn1_cls_score = self.conv(ppn1, 2, 1,
                                         weights_initializer=initializer,
                                         trainable=self.is_training,
                                         padding='VALID',
@@ -239,17 +239,19 @@ class PPN(object):
             # Compute softmax
             # Shape of ppn1_cls_prob = 1, 16, 16, 2
             ppn1_cls_prob = tf.nn.softmax(ppn1_cls_score)
+            print("ppn1_cls_score ", ppn1_cls_score.get_shape().as_list())
 
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Generate anchors = pixel centers of the last feature map.
             # Shape of anchors = 16*16, 2
-            anchors = generate_anchors((self.N3,) * self.dim) # FIXME express width and height better
+            anchors = generate_anchors((self.N3,) * self.dim)
             assert anchors.get_shape().as_list() == [self.N3**self.dim, self.dim]
 
             # Derive predicted positions (poi) with scores (poi_scores) from prediction parameters
             # and anchors. Take the first R proposed pixels which contain an object.
-            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (self.N2,) * self.dim) # FIXME hardcoded
+            proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (self.N2,) * self.dim)
             rois, roi_scores = top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
+            print("final proposals ", proposals.get_shape().as_list())
             assert proposals.get_shape().as_list() == [self.N3**self.dim, self.dim]
             assert scores.get_shape().as_list() == [self.N3**self.dim, 1]
             #assert rois.get_shape().as_list() == [None, 2]
@@ -313,16 +315,17 @@ class PPN(object):
             # Step 0) Convolution for PPN2 intermediate layer
             # Based on F3 feature map (ie after 3 max-pool layers in VGG)
             # Shape = nb_rois, 1, 1, 512
+            print("rpn_pooling", rpn_pooling)
             ppn2 = self.conv(rpn_pooling,
                               512, # RPN Channels = num_outputs
-                              (3, 3), # RPN Kernels FIXME change this to (1, 1)?
+                              3, # RPN Kernels FIXME change this to (1, 1)?
                               trainable=self.is_training,
                               weights_initializer=initializer2,
                               scope="ppn2_conv/3x3")
             # Step 1-a) PPN 2 pixel prediction parameters
             # Proposes pixel position (x, y) w.r.t. pixel center = anchor
             # Shape of ppn2_pixel_pred = nb_rois, 1, 1, 2
-            ppn2_pixel_pred = self.conv(ppn2, 2, [1, 1],
+            ppn2_pixel_pred = self.conv(ppn2, self.dim, 1,
                                         trainable=self.is_training,
                                         weights_initializer=initializer2,
                                         padding='VALID',
@@ -330,21 +333,21 @@ class PPN(object):
                                         scope='ppn2_pixel_pred')
             # Step 1-b) Generate class scores
             # Shape of ppn2_cls_score = nb_rois, 1, 1, num_classes
-            ppn2_cls_score = self.conv(ppn2, self.num_classes, [1, 1],
+            ppn2_cls_score = self.conv(ppn2, self.num_classes, 1,
                                         trainable=self.is_training,
                                         weights_initializer=initializer2,
                                         padding='VALID',
                                         activation_fn=None,
                                         scope='ppn2_cls_score')
             # Compute softmax
-            ppn2_cls_prob = tf.nn.softmax(ppn2_cls_score) # FIXME might need a reshape here
+            ppn2_cls_prob = tf.nn.softmax(ppn2_cls_score)
 
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Anchors are defined as center of pixels
-            # Shape [nb_rois * 4 * 4 , 2]
-            anchors2 = generate_anchors((1,)*self.dim, repeat=batch_size) # FIXME express width and height better
+            # Shape [nb_rois * 1 * 1, 2]
+            anchors2 = generate_anchors((1,)*self.dim, repeat=batch_size)
             assert anchors2.get_shape().as_list() == [None, self.dim]
-            # Derive proposed points from delta predictions (rpn_bbox_pred2) w.r.t. pixels centers
+            # Derive proposed points from delta predictions (ppn2_pixel_pred) w.r.t. pixels centers
             # Coordinates of proposals2 are in 1x1 ROI area
             # We have 1*1*num_roi proposals and corresponding scores
             proposals2, scores2 = predicted_pixels(ppn2_cls_prob, ppn2_pixel_pred, anchors2, (1,)*self.dim)
@@ -363,14 +366,14 @@ class PPN(object):
             # Option roi allows to convert gt_pixels_placeholder information to ROI 4x4 coordinates
             # closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, rois=rois, scores=ppn2_cls_score)
             closest_gt, closest_gt_distance, true_labels = assign_gt_pixels(self.gt_pixels_placeholder, proposals2, self.dim1, self.dim2, rois=rois)
-            assert closest_gt.get_shape().as_list() == [None]
-            assert closest_gt_distance.get_shape().as_list() == [None, 1]
-            assert true_labels.get_shape().as_list() == [None, 1]
+            # assert closest_gt.get_shape().as_list() == [None]
+            # assert closest_gt_distance.get_shape().as_list() == [None, 1]
+            # assert true_labels.get_shape().as_list() == [None, 1]
 
             # Positives now = pixels within certain distance range from
             # the closest ground-truth point of the same class (track edge or shower start)
             positives = compute_positives_ppn2(closest_gt_distance, threshold=self.ppn2_distance_threshold)
-            assert positives.get_shape().as_list() == [None, 1]
+            # assert positives.get_shape().as_list() == [None, 1]
 
             # Step 4) Loss
             # first is based on an absolute distance to the closest
