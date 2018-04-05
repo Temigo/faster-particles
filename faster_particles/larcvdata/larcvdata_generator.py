@@ -24,12 +24,61 @@ class LarcvGenerator(object):
         self.N = cfg.IMAGE_SIZE # shape of canvas
         self.cfg = cfg
         self.batch_size = cfg.BATCH_SIZE
+        self.dim = 2
+        if cfg.DATA_3D:
+            self.dim = 3
 
         np.random.seed(cfg.SEED)
 
         # FIXME random seed
-        io_config = \
-        """
+        if cfg.DATA_3D:
+            io_config = \
+            """
+%sIO: {
+  Verbosity:    3
+  EnableFilter: true
+  RandomAccess: 2
+  RandomSeed:   123
+  InputFiles:   %s
+  ProcessType:  ["Tensor3DCompressor","BatchFillerTensor3D","BatchFillerPPN","BatchFillerPPN"]
+  ProcessName:  ["%s_compressor","%s_data","%s_shower","%s_track"]
+  NumThreads: 5
+  NumBatchStorage: 5
+
+  ProcessList: {
+    %s_compressor: {
+      Verbosity: 3
+      Tensor3DProducer: "data"
+      OutputProducer: "data"
+      CompressionFactor: 4
+      PoolType: 1
+    }
+    %s_data: {
+      Verbosity: 3
+      Tensor3DProducer: "data"
+    }
+    %s_track: {
+      Verbosity: 3
+      Tensor3DProducer: "data"
+      ParticleProducer: "ppn_mcst"
+      BufferSize: 20
+      ShapeType:  "track"
+      PointType:  "3d"
+    }
+    %s_shower: {
+      Verbosity: 3
+      Tensor3DProducer: "data"
+      ParticleProducer: "ppn_mcst"
+      BufferSize: 20
+      ShapeType:  "shower"
+      PointType:  "3d"
+    }
+  }
+}
+            """ % ((ioname, filelist) + (ioname,)*8)
+        else:
+            io_config = \
+            """
 %sIO: {
   Verbosity:    3
   EnableFilter: false
@@ -67,7 +116,7 @@ class LarcvGenerator(object):
     }
   }
 }
-        """ % ((ioname, filelist) + (ioname,)*6)
+            """ % ((ioname, filelist) + (ioname,)*6)
         # FIXME raises KeyError
         #io_config = io_config.format(ioname)
         self.ioname = ioname
@@ -103,6 +152,7 @@ class LarcvGenerator(object):
 
         gt_pixels = []
         output = []
+        img_shape = (1,) + (self.N,) * self.dim + (1,)
         for index in np.arange(self.batch_size):
             image    = batch_image.data()  [index]
             t_points = batch_track.data()  [index]
@@ -111,32 +161,46 @@ class LarcvGenerator(object):
             #image_dim = batch_image.dim()
             #image = image.reshape(image_dim[1:3])
             #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
-
-            for pt_index in np.arange(int(len(t_points)/2)):
-                x = t_points[ 2*pt_index     ]
-                y = t_points[ 2*pt_index + 1 ]
-                if x < 0: break
-                gt_pixels.append([y, x, 1])
-            for pt_index in np.arange(int(len(s_points)/2)):
-                x = s_points[ 2*pt_index     ]
-                y = s_points[ 2*pt_index + 1 ]
-                if x < 0: break
-                gt_pixels.append([y, x, 2])
+            print(t_points, s_points)
+            if self.cfg.DATA_3D:
+                for pt_index in np.arange(int(len(t_points)/2)):
+                    x = t_points[ 3*pt_index     ]
+                    y = t_points[ 3*pt_index + 1 ]
+                    z = t_points[ 3*pt_index + 2 ]
+                    if x < 0: break
+                    gt_pixels.append([x, y, z, 1])
+                for pt_index in np.arange(int(len(s_points)/2)):
+                    x = s_points[ 3*pt_index     ]
+                    y = s_points[ 3*pt_index + 1 ]
+                    z = s_points[ 3*pt_index + 2 ]
+                    if x < 0: break
+                    gt_pixels.append([x, y, z, 2])
+            else:
+                for pt_index in np.arange(int(len(t_points)/2)):
+                    x = t_points[ 2*pt_index     ]
+                    y = t_points[ 2*pt_index + 1 ]
+                    if x < 0: break
+                    gt_pixels.append([y, x, 1])
+                for pt_index in np.arange(int(len(s_points)/2)):
+                    x = s_points[ 2*pt_index     ]
+                    y = s_points[ 2*pt_index + 1 ]
+                    if x < 0: break
+                    gt_pixels.append([y, x, 2])
             if len(gt_pixels) > 0:
-                output.append(image.reshape([1, self.N, self.N, 1]))
+                output.append(image.reshape(img_shape))
 
         if len(output) == 0: # No gt pixels in this batch - try next batch
             print("DUMP")
             return self.forward()
 
         # TODO For now we only consider batch size 1
-        output = np.reshape(np.array(output), (1, self.N, self.N, 1))
+        output = np.reshape(np.array(output), img_shape)
 
         blob = {}
         blob['data'] = output.astype(np.float32)
-        blob['im_info'] = [1, self.N, self.N, 3]
+        blob['im_info'] = list(img_shape)
         blob['gt_pixels'] = np.array(gt_pixels)
-
+        print("larcv generator finished")
         return blob
 
 if __name__ == '__main__':

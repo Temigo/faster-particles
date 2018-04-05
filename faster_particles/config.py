@@ -31,7 +31,8 @@ class PPNConfig(object):
     SEED = 123
     TOYDATA = False
     # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
-    DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root"
+    # DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root" # For 2D
+    DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root" # For 3D
     DATA_3D = False
 
     # Track configuration
@@ -90,7 +91,7 @@ class PPNConfig(object):
         parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
         parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
-        parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, choices=[128, 256, 512], help="Width (and height) of image.")
+        parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, help="Width (and height) of image.")
         parser.add_argument("-mt", "--max-tracks", default=self.MAX_TRACKS, type=int, help="Maximum number of tracks generated per image (uniform distribution).")
         parser.add_argument("-mk", "--max-kinks", default=self.MAX_KINKS, type=int, help="Maximum number of kinks generated for any track.")
         parser.add_argument("-mtl", "--max-track-length", default=self.MAX_TRACK_LENGTH, type=float, help="Maximum length of any track.")

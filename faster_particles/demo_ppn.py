@@ -11,7 +11,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.collections import PolyCollection
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
 import sys, os, subprocess
 from sklearn.cluster import DBSCAN
@@ -53,7 +54,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
 
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    ax.imshow(blob['data'][0,:,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+    #ax.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
 
     #for gt_pixel in blob['gt_pixels']:
     #    x, y = gt_pixel[1], gt_pixel[0]
@@ -66,15 +67,17 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
         for roi in rois:
             if cfg.DATA_3D:
                 x, y, z = roi[2], roi[1], roi[0]
+                x, y, z = x*dim1*dim2, y*dim2*dim1, z*dim1*dim2
+                size = dim1
                 vertices = [
-                    [[x, y, z], [x+1, y, z], [x, y+1, z], [x+1, y+1, z]],
-                    [[x, y, z+1], [x+1, y, z+1], [x, y+1, z+1], [x+1, y+1, z+1]],
-                    [[x, y, z], [x, y+1, z], [x, y, z+1], [x, y+1, z+1]],
-                    [[x+1, y, z], [x+1, y+1, z], [x+1, y, z+1], [x+1, y+1, z+1]],
-                    [[x, y, z], [x+1, y, z], [x, y, z+1], [x+1, y, z+1]],
-                    [[x, y+1, z], [x+1, y+1, z], [x, y+1, z+1], [x+1, y+1, z+1]]
+                    [[x, y, z], [x+size, y, z], [x, y+size, z], [x+size, y+size, z]],
+                    [[x, y, z+size], [x+size, y, z+size], [x, y+size, z+size], [x+size, y+size, z+size]],
+                    [[x, y, z], [x, y+size, z], [x, y, z+size], [x, y+size, z+size]],
+                    [[x+size, y, z], [x+size, y+size, z], [x+size, y, z+size], [x+size, y+size, z+size]],
+                    [[x, y, z], [x+size, y, z], [x, y, z+size], [x+size, y, z+size]],
+                    [[x, y+size, z], [x+size, y+size, z], [x, y+size, z+size], [x+size, y+size, z+size]]
                 ]
-                ax.add_collection3d(PolyCollection(
+                ax.add_collection3d(Poly3DCollection(
                     vertices,
                     facecolors='pink',
                     linewidths=1.0,
@@ -107,7 +110,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
 
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    ax2.imshow(blob['data'][0,:,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+    #ax2.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
 
     if im_proposals is not None and im_scores is not None:
         if len(im_proposals) > 0:
@@ -138,6 +141,38 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
+
+    if cfg.DATA_3D and im_proposals is not None and im_scores is not None:
+        fig3 = plt.figure()
+        gt = len(blob['gt_pixels']) # number of gt pixels
+        for j in range(gt):
+            gt_pixel = blob['gt_pixels'][j]
+            ax_x = fig3.add_subplot(gt, 3, 3*j+1, aspect='auto')
+            ax_y = fig3.add_subplot(gt, 3, 3*j+2, aspect='auto')
+            ax_z = fig3.add_subplot(gt, 3, 3*j+3, aspect='auto')
+            x, y, z = int(gt_pixel[2]), int(gt_pixel[1]), int(gt_pixel[0])
+            ax_x.imshow(blob['data'][0,x,:,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+            ax_y.imshow(blob['data'][0,:,y,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+            ax_z.imshow(blob['data'][0,:,:,z,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+            for i in range(len(im_proposals)):
+                proposal = im_proposals[i]
+                xi, yi, zi = proposal[2], proposal[1], proposal[0]
+                if im_labels[i] == 0: # Track
+                    ax_x.plot([yi], [zi], 'yo')
+                    ax_y.plot([xi], [zi], 'yo')
+                    ax_z.plot([xi], [yi], 'yo')
+                elif im_labels[i] == 1: #Shower
+                    ax_x.plot([yi], [zi], 'go')
+                    ax_y.plot([xi], [zi], 'go')
+                    ax_z.plot([xi], [yi], 'go')
+            ax_x.set_xlim(0, cfg.IMAGE_SIZE)
+            ax_x.set_ylim(0, cfg.IMAGE_SIZE)
+            ax_y.set_xlim(0, cfg.IMAGE_SIZE)
+            ax_y.set_ylim(0, cfg.IMAGE_SIZE)
+            ax_z.set_xlim(0, cfg.IMAGE_SIZE)
+            ax_z.set_ylim(0, cfg.IMAGE_SIZE)
+        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_projections_%d.png' % index), dpi=200)
+        plt.close(fig3)
 
 def statistics(cfg, im_proposals, im_labels, im_scores):
     track_scores = []

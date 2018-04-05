@@ -73,14 +73,10 @@ class PPN(object):
         print(blobs['gt_pixels'])
         print("#positives: ", np.sum(ppn2_positives))
 
-        return summary, {'ppn1_proposals': ppn1_proposals,
-                        'ppn1_labels': labels_ppn1,
-                        'rois': rois,
+        return summary, {'rois': rois,
                         'im_labels': im_labels,
                         'im_proposals': im_proposals,
-                        'im_scores': im_scores,
-                        'ppn2_proposals': ppn2_proposals,
-                        'ppn2_positives': ppn2_positives}
+                        'im_scores': im_scores}
 
     def init_placeholders(self):
         # Define placeholders
@@ -104,8 +100,8 @@ class PPN(object):
         f5shape = f5shape.as_list()
         self.N2 = f3shape[1]
         self.N3 = f5shape[1]
-        if self.N%self.N2 != 0 or self.N2%self.N3 != 0:
-            raise Exception("Layers dimensions are incompatibles.")
+        #if self.N%self.N2 != 0 or self.N2%self.N3 != 0:
+        #    raise Exception("Layers dimensions are incompatibles.")
         self.dim1 = int(self.N/self.N2)
         self.dim2 = int(self.N2/self.N3)
         print("N2 = %d ; N3 = %d ; dim1 = %d ; dim2 = %d" % (self.N2, self.N3, self.dim1, self.dim2))
@@ -113,9 +109,11 @@ class PPN(object):
     def set3d(self):
         self.conv = slim.conv2d
         self.dim = 2
+        self.ppn1_channels, self.ppn2_channels = 512, 512
         if self.cfg.DATA_3D:
             self.conv = slim.conv3d
             self.dim = 3
+            self.ppn1_channels, self.ppn2_channels = 16, 16
 
     def create_architecture(self, is_training=True, reuse=None, scope="ppn"):
         self.is_training = is_training
@@ -138,7 +136,9 @@ class PPN(object):
 
                 # Build PPN1
                 rois = self.build_ppn1(net2)
+                #print("rois", rois.get_shape().as_list())
                 rois = slice_rois(rois, self.dim2)
+                #print("rois", rois.get_shape().as_list())
 
                 if self.is_training:
                     # During training time, check if all ground truth pixels are covered by ROIs
@@ -214,7 +214,7 @@ class PPN(object):
             # Step 0) Convolution
             # Shape of ppn1 = 1, 16, 16, 512
             ppn1 = self.conv(net2,
-                              512, # RPN Channels = num_outputs
+                              self.ppn1_channels, # RPN Channels = num_outputs
                               3, # RPN Kernels
                               weights_initializer=initializer,
                               trainable=self.is_training,
@@ -317,7 +317,7 @@ class PPN(object):
             # Shape = nb_rois, 1, 1, 512
             print("rpn_pooling", rpn_pooling)
             ppn2 = self.conv(rpn_pooling,
-                              512, # RPN Channels = num_outputs
+                              self.ppn2_channels, # RPN Channels = num_outputs
                               3, # RPN Kernels FIXME change this to (1, 1)?
                               trainable=self.is_training,
                               weights_initializer=initializer2,

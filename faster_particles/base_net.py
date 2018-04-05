@@ -99,10 +99,12 @@ class VGG(BaseNet):
             conv = slim.conv2d
             max_pool = slim.max_pool2d
             dim = 2
+            num_channels = 64
             if self.is_3d:
                 conv = slim.conv3d
                 max_pool = slim.max_pool3d
                 dim = 3
+                num_channels = 2
 
             with slim.arg_scope([conv, slim.fully_connected],
                                 normalizer_fn=slim.batch_norm,
@@ -110,19 +112,19 @@ class VGG(BaseNet):
                                 weights_regularizer=weights_regularizer,
                                 biases_regularizer=biases_regularizer,
                                 biases_initializer=tf.constant_initializer(0.0)):
-                net = slim.repeat(image_placeholder, 2, conv, 64, [3,] * dim,
+                net = slim.repeat(image_placeholder, 2, conv, num_channels, [3,] * dim,
                                   trainable=is_training, scope='conv1')
                 net = max_pool(net, [2,] * dim, padding='SAME', scope='pool1')
-                net = slim.repeat(net, 2, conv, 128, [3,] * dim,
+                net = slim.repeat(net, 2, conv, 2 * num_channels, [3,] * dim,
                                 trainable=is_training, scope='conv2')
                 net = max_pool(net, [2,] * dim, padding='SAME', scope='pool2')
-                net = slim.repeat(net, 3, conv, 256, [3,] * dim,
+                net = slim.repeat(net, 3, conv, 4 * num_channels, [3,] * dim,
                                 trainable=is_training, scope='conv3')
                 net = max_pool(net, [2,] * dim, padding='SAME', scope='pool3')
-                net2 = slim.repeat(net, 3, conv, 512, [3,] * dim,
+                net2 = slim.repeat(net, 3, conv, 8 * num_channels, [3,] * dim,
                                 trainable=is_training, scope='conv4')
                 net2 = max_pool(net2, [2,] * dim, padding='SAME', scope='pool4')
-                net2 = slim.repeat(net2, 3, conv, 512, [3,] * dim,
+                net2 = slim.repeat(net2, 3, conv, 8 * num_channels, [3,] * dim,
                                 trainable=is_training, scope='conv5')
                 net2 = max_pool(net2, [2,] * dim, padding='SAME', scope='pool5')
                 # After 5 times (2, 2) pooling, if input image is 512x512

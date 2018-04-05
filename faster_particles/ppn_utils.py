@@ -41,7 +41,6 @@ def top_R_pixels(proposals, scores, R=20, threshold=0.5):
     Shapes are [N*N, 2] and [N*N, 1]
     """
     with tf.variable_scope("top_R_pixels"):
-        print("scores ", scores.get_shape().as_list())
         # Select top R pixel proposals
         flat_scores = tf.squeeze(scores) # shape N*N
         R = min(R, flat_scores.get_shape().as_list()[0])
@@ -78,14 +77,10 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20):
          # has shape (None, N, N, num_classes - 1)
         dim = anchors.get_shape().as_list()[-1]
         N = rpn_cls_prob.get_shape().as_list()[1]
-        print(rpn_bbox_pred.get_shape().as_list(), rpn_cls_prob.get_shape().as_list())
-        print(rpn_cls_prob.get_shape().as_list()[1:-1])
         # Get proposal pixels from regression deltas of rpn_bbox_pred
         #proposals = pixels_transform_inv(anchors, rpn_bbox_pred)
         anchors = tf.reshape(anchors, shape=tf.stack([-1] + [N] * dim + [dim]))
-        print(anchors.get_shape().as_list())
         proposals =  anchors + rpn_bbox_pred
-        print(proposals.get_shape().as_list())
         proposals = tf.reshape(proposals, (-1, dim))
         # clip predicted pixels to the image
         proposals = clip_pixels(proposals, im_shape)
@@ -97,6 +92,7 @@ def all_combinations(indices):
 
 def slice_rois(rois, dim2):
     """
+    rois shape = None, dim
     Transform ROI (1 pixel on F5) into 4x4 ROIs on F3 (using F5 coordinates)
     """
     with tf.variable_scope("slice_rois"):
@@ -104,12 +100,14 @@ def slice_rois(rois, dim2):
         rois_slice = [] # Shape dim x nb rois x 1
         for i in range(dim):
             rois_slice.append(tf.slice(rois, [0, i], [-1, 1], name="rois_%d" % dim) * dim2)
-        rois_slice = tf.expand_dims(rois_slice, -1)
+        rois_slice = tf.expand_dims(rois_slice, -1) # shape dim x nb rois x 1 x 1
+        # FIXME construct rois_slice directly without slicing?
         indices = ([-2, -1, 0, 1],) * dim
-        shifts = all_combinations(indices).T[:, np.newaxis, np.newaxis, :]
-        all_rois = rois_slice + shifts # using broadcasting
-        rois = tf.transpose(tf.squeeze(tf.concat(tf.concat(all_rois, axis=2), axis=3)))
-        rois = tf.identity(rois / dim2, name="sliced_rois")
+        shifts = all_combinations(indices).T[:, np.newaxis, np.newaxis, :] # shape dim x 1 x 1 x nb comb
+        all_rois = rois_slice + shifts # using broadcasting => shape dim x nb rois x 1 x nb comb
+        #rois = tf.transpose(tf.squeeze(tf.concat(tf.concat(all_rois, axis=1), axis=3)))
+        rois = tf.reshape(tf.transpose(all_rois), (-1, dim)) # FIXME do we need to transpose?
+        rois = tf.identity(rois / dim2, name="sliced_rois") # (shape nb rois * nb comb) x dim
         return rois
 
 def include_gt_pixels(rois, gt_pixels, dim1, dim2):
