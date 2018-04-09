@@ -32,7 +32,8 @@ class PPNConfig(object):
     TOYDATA = False
     # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
     # DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root" # For 2D
-    DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root" # For 3D
+    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root" # For 3D
+    DATA = ""
     DATA_3D = False
 
     # Track configuration

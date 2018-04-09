@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='faster-particles',
-    version='0.1.6',
+    version='0.2.0',
     author='Laura Domine, Ji Won Park, Kazuhiro Terao',
     author_email='temigo@gmx.com',
     packages=find_packages(),
@@ -18,7 +18,7 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/Temigo/faster-particles',
     install_requires=[
-        "matplotlib >= 1.5.3",
+        "matplotlib >= 2.2.2",
         "numpy >= 1.13.1",
         "scikit-learn >= 0.18.1",
         "scikit-image >= 0.12.3",

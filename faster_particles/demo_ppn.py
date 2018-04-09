@@ -239,8 +239,6 @@ def closest_gt_distance(im_proposals, gt_pixels):
 
 def distances_plot(cfg, distances):
     plt.gcf().clear()
-    print(distances)
-    print(np.count_nonzero(np.greater(distances, 5)), len(distances))
     bins = np.linspace(0, 5, 20)
     plt.hist(distances, 100)
     plt.xlabel("distance to closest ground truth pixel")
@@ -288,8 +286,6 @@ def inference(cfg):
             blob = data.forward()
             summary, results = net.test_image(sess, blob)
             if cfg.NET == 'ppn':
-                #print(blob, results)
-                #im_proposals.extend(results['im_proposals'])
                 im_labels.extend(results['im_labels'])
                 im_scores.extend(results['im_scores'])
                 im_proposals_filtered = display(blob, cfg, index=i, dim1=net.dim1, dim2=net.dim2, **results)
