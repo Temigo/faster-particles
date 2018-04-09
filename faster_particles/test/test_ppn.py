@@ -7,11 +7,11 @@ from __future__ import print_function
 import unittest
 import numpy as np
 import tensorflow as tf
-from ppn import PPN
-from ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
+from faster_particles.ppn import PPN
+from faster_particles.ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
     compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels, \
     include_gt_pixels, predicted_pixels
-from toydata_generator import ToydataGenerator
+from faster_particles.toydata.toydata_generator import ToydataGenerator
 
 def generate_anchors_np(width, height, repeat=1):
     anchors_np = np.indices((width, height)).transpose((1, 2, 0))
@@ -36,7 +36,7 @@ class Test(unittest.TestCase):
         repeat = 3
         anchors_np = generate_anchors_np(width=width, height=height, repeat=repeat)
         with tf.Session() as sess:
-            anchors_tf = generate_anchors(width=width, height=height, repeat=repeat)
+            anchors_tf = generate_anchors((width, height), repeat=repeat)
             return np.array_equal(anchors_tf, anchors_np)
 
     def test_clip_pixels(self):
@@ -193,14 +193,14 @@ class Test(unittest.TestCase):
 
     def test_assign_gt_pixels(self):
         # Dummy input for testing
-        N = 2 
+        N = 2
         nb_rois = 5
         nb_gt = 7
         gt_pixels_placeholder_test = np.empty((nb_gt, 3))
         proposals_test = np.ones((nb_rois*N*N, 2))
         #rois_test = np.ones((nb_rois, 2))
         rois_test = None
-        
+
         gt_pixels_np = gt_pixels_placeholder_test[:,:-1] # shape (nb_gt, 2)
         gt_pixels_np = gt_pixels_np[np.newaxis, :] # shape (1, nb_gt, 2)
         print(gt_pixels_np.shape)
@@ -212,8 +212,8 @@ class Test(unittest.TestCase):
         #    gt_pixels_np = gt_pixels_np[np.newaxis, :]
         #    gt_pixels_np = np.tile(gt_pixels_np, [nb_rois*N*N, nb_rois, 1, 1])
         #    broadcast_rois_np = np.expand_dims(np.expand_dims(rois, axis=1), axis=1)
-        #    braodcast_rois_np = np.tile(broadcast_rois, [1, 
-        
+        #    braodcast_rois_np = np.tile(broadcast_rois, [1,
+
 
 if __name__ == '__main__':
     unittest.main()
