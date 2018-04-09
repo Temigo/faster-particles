@@ -136,6 +136,10 @@ class LarcvGenerator(object):
         #self.proc.set_next_index(10345)
         self.proc.start_manager(self.batch_size)
 
+        # Retrieve voxel sparse for track/shower only
+        from ROOT import TChain
+        self.ch = TChain("sparse3d_data_tree")
+        self.ch.AddFile(cfg.DATA)
 
     def __delete__(self):
         self.proc.stop_manager()
@@ -145,10 +149,12 @@ class LarcvGenerator(object):
         return 4
 
     def forward(self):
-        self.proc.next()
+        self.proc.next(store_entries=True, store_event_ids=True)
         batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
         batch_track  = self.proc.fetch_data ( '%s_track' % self.ioname  )
         batch_shower = self.proc.fetch_data ( '%s_shower' % self.ioname )
+        #batch_entries = self.proc.fetch_entries()
+        #batch_event_ids = self.proc.fetch_event_ids()
 
         gt_pixels = []
         output = []
@@ -157,11 +163,40 @@ class LarcvGenerator(object):
             image    = batch_image.data()  [index]
             t_points = batch_track.data()  [index]
             s_points = batch_shower.data() [index]
+
+            voxels = []
+
+            """
+            entry    = batch_entries.data()[index]
+            event_id = batch_event_ids.data()
+            self.ch.GetEntry(entry)
+            event_data = self.ch.sparse3d_data_branch
+            vox_array = event_data.as_vector()
+            for vox in vox_array:
+                pos = event_data.meta().position(vox.id())
+                #print(vox.id(), vox.value(), '...', pos.x,pos.y,pos.z)
+                #x, y, z = (self.N/768.0 * pos.x, self.N/768.0 * pos.y, self.N/768.0 * pos.z) # FIXME hardcoded
+                x, y, z = pos.x, pos.y, pos.z
+                x, y, z = (int(x), int(y), int(z))
+                #voxels[x][y][z] = True # FIXME add value information
+                voxels.append([x, y, z])
+                # FIXME check this is the correct entry()"""
+
+            indices = np.nonzero(image)[0]
+            for i in indices:
+                x = i%self.N
+                i = (i-x)/self.N
+                y = i%self.N
+                i = (i-y)/self.N
+                z = i%self.N
+                voxels.append([x,y,z])
+            image = image.reshape(img_shape)
+
             # TODO set N from this
             #image_dim = batch_image.dim()
             #image = image.reshape(image_dim[1:3])
             #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
-            print(t_points, s_points)
+            #print(t_points, s_points)
             if self.cfg.DATA_3D:
                 for pt_index in np.arange(int(len(t_points)/2)):
                     x = t_points[ 3*pt_index     ]
@@ -187,7 +222,7 @@ class LarcvGenerator(object):
                     if x < 0: break
                     gt_pixels.append([y, x, 2])
             if len(gt_pixels) > 0:
-                output.append(image.reshape(img_shape))
+                output.append(image)
 
         if len(output) == 0: # No gt pixels in this batch - try next batch
             print("DUMP")
@@ -200,18 +235,21 @@ class LarcvGenerator(object):
         blob['data'] = output.astype(np.float32)
         blob['im_info'] = list(img_shape)
         blob['gt_pixels'] = np.array(gt_pixels)
-        print("larcv generator finished")
+        blob['voxels'] = np.array(voxels)
         return blob
 
 if __name__ == '__main__':
     class MyCfg:
-        IMAGE_SIZE = 768
+        IMAGE_SIZE = 192
         SEED = 123
         BATCH_SIZE = 1
+        DATA_3D = True
+        DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root"
 
     t = LarcvGenerator(MyCfg(), ioname='test', filelist='["/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root"]')
-    for i in range(10):
+    for i in range(2):
         blobdict = t.forward()
         print(blobdict['data'].shape)
         print("gt pixels shape ", blobdict['gt_pixels'].shape)
         print("gt pixels ", blobdict['gt_pixels'])
+        print("voxels ", blobdict['voxels'])
