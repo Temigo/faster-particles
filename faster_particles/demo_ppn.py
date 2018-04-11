@@ -230,7 +230,7 @@ def get_filelist(ls_command):
     return str(filelist.read().splitlines()).replace('\'', '\"').replace(" ", "")
 
 def closest_gt_distance(im_proposals, gt_pixels):
-    gt_pixels = gt_pixels[:, :2]
+    gt_pixels = gt_pixels[:, :-1]
     distances = []
     for proposal in im_proposals:
         distances.append(np.min(np.sqrt(np.sum(np.power([proposal] - gt_pixels, 2), axis=1))))

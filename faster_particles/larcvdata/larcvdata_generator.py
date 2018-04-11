@@ -198,13 +198,13 @@ class LarcvGenerator(object):
             #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
             #print(t_points, s_points)
             if self.cfg.DATA_3D:
-                for pt_index in np.arange(int(len(t_points)/2)):
+                for pt_index in np.arange(int(len(t_points)/3)):
                     x = t_points[ 3*pt_index     ]
                     y = t_points[ 3*pt_index + 1 ]
                     z = t_points[ 3*pt_index + 2 ]
                     if x < 0: break
                     gt_pixels.append([x, y, z, 1])
-                for pt_index in np.arange(int(len(s_points)/2)):
+                for pt_index in np.arange(int(len(s_points)/3)):
                     x = s_points[ 3*pt_index     ]
                     y = s_points[ 3*pt_index + 1 ]
                     z = s_points[ 3*pt_index + 2 ]

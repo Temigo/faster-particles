@@ -59,7 +59,7 @@ def top_R_pixels(proposals, scores, R=20, threshold=0.5):
         #assert proposals.get_shape().as_list() == [None, 2]
         return proposals, scores
 
-def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape, R=20):
+def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape):
     """
     rpn_cls_prob.shape = [None, N, N, n] where n = 2 (background/signal) or num_classes
     rpn_bbox_pred.shape = [None, N, N, 2]
@@ -204,7 +204,7 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
         # Tile to have shape (A*N*N, None, 2)
         all_gt_pixels = tf.tile(gt_pixels, tf.stack([tf.shape(proposals)[0], 1, 1]))
         all_gt_pixels_mask = tf.fill(tf.shape(all_gt_pixels)[0:2], True)
-        assert all_gt_pixels.get_shape().as_list() == [None, None, dim]
+        # assert all_gt_pixels.get_shape().as_list() == [None, None, dim]
         # Reshape proposals to [A*N*N, 1, 2]
         proposals = tf.expand_dims(proposals, axis=1)
         distances = tf.sqrt(tf.reduce_sum(tf.pow(proposals - all_gt_pixels, 2), axis=2))
