@@ -203,13 +203,13 @@ class LarcvGenerator(object):
                     y = t_points[ 3*pt_index + 1 ]
                     z = t_points[ 3*pt_index + 2 ]
                     if x < 0: break
-                    gt_pixels.append([x, y, z, 1])
+                    gt_pixels.append([z, y, x, 1])
                 for pt_index in np.arange(int(len(s_points)/3)):
                     x = s_points[ 3*pt_index     ]
                     y = s_points[ 3*pt_index + 1 ]
                     z = s_points[ 3*pt_index + 2 ]
                     if x < 0: break
-                    gt_pixels.append([x, y, z, 2])
+                    gt_pixels.append([z, y, x, 2])
             else:
                 for pt_index in np.arange(int(len(t_points)/2)):
                     x = t_points[ 2*pt_index     ]

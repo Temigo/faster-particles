@@ -136,9 +136,7 @@ class PPN(object):
 
                 # Build PPN1
                 rois = self.build_ppn1(net2)
-                #print("rois", rois.get_shape().as_list())
                 rois = slice_rois(rois, self.dim2)
-                #print("rois", rois.get_shape().as_list())
 
                 if self.is_training:
                     # During training time, check if all ground truth pixels are covered by ROIs
@@ -239,7 +237,6 @@ class PPN(object):
             # Compute softmax
             # Shape of ppn1_cls_prob = 1, 16, 16, 2
             ppn1_cls_prob = tf.nn.softmax(ppn1_cls_score)
-            print("ppn1_cls_score ", ppn1_cls_score.get_shape().as_list())
 
             # Step 3) Get a (meaningful) subset of rois and associated scores
             # Generate anchors = pixel centers of the last feature map.
@@ -251,7 +248,6 @@ class PPN(object):
             # and anchors. Take the first R proposed pixels which contain an object.
             proposals, scores = predicted_pixels(ppn1_cls_prob, ppn1_pixel_pred, anchors, (self.N2,) * self.dim)
             rois, roi_scores = top_R_pixels(proposals, scores, R=20, threshold=self.ppn1_score_threshold)
-            print("final proposals ", proposals.get_shape().as_list())
             assert proposals.get_shape().as_list() == [self.N3**self.dim, self.dim]
             assert scores.get_shape().as_list() == [self.N3**self.dim, 1]
             #assert rois.get_shape().as_list() == [None, 2]
@@ -315,7 +311,6 @@ class PPN(object):
             # Step 0) Convolution for PPN2 intermediate layer
             # Based on F3 feature map (ie after 3 max-pool layers in VGG)
             # Shape = nb_rois, 1, 1, 512
-            print("rpn_pooling", rpn_pooling)
             ppn2 = self.conv(rpn_pooling,
                               self.ppn2_channels, # RPN Channels = num_outputs
                               3, # RPN Kernels FIXME change this to (1, 1)?

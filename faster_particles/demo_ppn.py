@@ -76,7 +76,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # Display original image
     if cfg.DATA_3D:
         for voxel in blob['voxels']:
-            draw_voxel(voxel[2], voxel[1], voxel[0], 1, ax, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
+            draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
     else:
         ax.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
 
@@ -137,9 +137,9 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # Display original image
     if cfg.DATA_3D:
         for voxel in blob['voxels']:
-            draw_voxel(voxel[2], voxel[1], voxel[0], 1, ax2, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
+            draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax2, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
     else:
-        ax.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+        ax2.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
 
     if im_proposals is not None and im_scores is not None:
         if len(im_proposals) > 0:
@@ -170,6 +170,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
+    print(im_proposals)
     return im_proposals
 
     """if cfg.DATA_3D and im_proposals is not None and im_scores is not None:
@@ -282,7 +283,7 @@ def inference(cfg):
     im_proposals, im_labels, im_scores, distances = [], [], [], []
     with tf.Session() as sess:
         saver.restore(sess, cfg.WEIGHTS_FILE)
-        for i in range(100):
+        for i in range(10):
             blob = data.forward()
             summary, results = net.test_image(sess, blob)
             if cfg.NET == 'ppn':

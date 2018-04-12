@@ -5,6 +5,10 @@ from train_ppn import train_ppn, train_classification
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+# Control Tensorflow verbose level with TF_CPP_MIN_LOG_LEVEL
+# it defaults to 0 (all logs shown), but can be set to 1 to filter out INFO logs,
+# 2 to additionally filter out WARNING logs, and 3 to additionally filter out ERROR logs
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
 class PPNConfig(object):
     IMAGE_SIZE = 768 # 512
