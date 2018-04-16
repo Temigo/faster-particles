@@ -7,7 +7,7 @@ from scipy.misc import imresize
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import sys
+import os, sys
 
 import ROOT
 # PyROOT hijacks help option otherwise
@@ -31,92 +31,22 @@ class LarcvGenerator(object):
         np.random.seed(cfg.SEED)
 
         # FIXME random seed
+        self.train_uresnet = (cfg.NET == 'base' and cfg.BASE_NET == 'uresnet')
+        print('train_uresnet = ', self.train_uresnet)
         if cfg.DATA_3D:
-            io_config = \
-            """
-%sIO: {
-  Verbosity:    3
-  EnableFilter: true
-  RandomAccess: 2
-  RandomSeed:   123
-  InputFiles:   %s
-  ProcessType:  ["Tensor3DCompressor","BatchFillerTensor3D","BatchFillerPPN","BatchFillerPPN"]
-  ProcessName:  ["%s_compressor","%s_data","%s_shower","%s_track"]
-  NumThreads: 5
-  NumBatchStorage: 5
-
-  ProcessList: {
-    %s_compressor: {
-      Verbosity: 3
-      Tensor3DProducer: "data"
-      OutputProducer: "data"
-      CompressionFactor: 4
-      PoolType: 1
-    }
-    %s_data: {
-      Verbosity: 3
-      Tensor3DProducer: "data"
-    }
-    %s_track: {
-      Verbosity: 3
-      Tensor3DProducer: "data"
-      ParticleProducer: "ppn_mcst"
-      BufferSize: 20
-      ShapeType:  "track"
-      PointType:  "3d"
-    }
-    %s_shower: {
-      Verbosity: 3
-      Tensor3DProducer: "data"
-      ParticleProducer: "ppn_mcst"
-      BufferSize: 20
-      ShapeType:  "shower"
-      PointType:  "3d"
-    }
-  }
-}
-            """ % ((ioname, filelist) + (ioname,)*8)
+            replace = 8
+            if self.train_uresnet:
+                config_file = 'uresnet_3d.cfg'
+            else:
+                config_file = 'ppn_3d.cfg'
         else:
-            io_config = \
-            """
-%sIO: {
-  Verbosity:    3
-  EnableFilter: false
-  RandomAccess: 2
-  RandomSeed:   123
-  InputFiles:   %s
-  ProcessType:  ["BatchFillerImage2D","BatchFillerPPN","BatchFillerPPN"]
-  ProcessName:  ["%s_data","%s_shower","%s_track"]
-  NumThreads: 5
-  NumBatchStorage: 5
-
-  ProcessList: {
-    %s_data: {
-      Verbosity: 3
-      ImageProducer: "data"
-      Channels: [0]
-    }
-    %s_track: {
-      Verbosity: 3
-      ImageProducer: "data"
-      ImageChannel: 0
-      ParticleProducer: "ppn_mcst"
-      BufferSize: 100
-      ShapeType:  "track"
-      PointType:  "xy"
-    }
-    %s_shower: {
-      Verbosity: 3
-      ImageProducer: "data"
-      ImageChannel: 0
-      ParticleProducer: "ppn_mcst"
-      BufferSize: 100
-      ShapeType:  "shower"
-      PointType:  "xy"
-    }
-  }
-}
-            """ % ((ioname, filelist) + (ioname,)*6)
+            if self.train_uresnet:
+                replace = 4
+                config_file = 'uresnet_2d.cfg'
+            else:
+                replace = 6
+                config_file = 'ppn_2d.cfg'
+        io_config = open(os.path.join(os.path.dirname(__file__), config_file)).read() % ((ioname, filelist) + (ioname,)*replace)
         # FIXME raises KeyError
         #io_config = io_config.format(ioname)
         self.ioname = ioname
@@ -148,7 +78,29 @@ class LarcvGenerator(object):
     def num_classes(self):
         return 4
 
-    def forward(self):
+    def forward_uresnet(self):
+        self.proc.next()
+        batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
+        batch_labels  = self.proc.fetch_data ( '%s_labels' % self.ioname  )
+        output_image, output_labels = [], []
+        img_shape = (1,) + (self.N,) * self.dim + (1,)
+        labels_shape = (1,) + (self.N,) * self.dim
+        for index in np.arange(self.batch_size):
+            image    = batch_image.data()  [index]
+            labels   = batch_labels.data() [index]
+            image = image.reshape(img_shape)
+            labels = labels.reshape(labels_shape)
+            output_image.append(image)
+            output_labels.append(labels)
+        # TODO For now we only consider batch size 1
+        output_image = np.reshape(np.array(output_image), img_shape)
+        output_labels = np.reshape(np.array(output_labels), labels_shape)
+        blob = {}
+        blob['data'] = output_image.astype(np.float32)
+        blob['labels'] = output_labels.astype(np.int32)
+        return blob
+
+    def forward_ppn(self):
         self.proc.next(store_entries=True, store_event_ids=True)
         batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
         batch_track  = self.proc.fetch_data ( '%s_track' % self.ioname  )
@@ -237,6 +189,12 @@ class LarcvGenerator(object):
         blob['gt_pixels'] = np.array(gt_pixels)
         blob['voxels'] = np.array(voxels)
         return blob
+
+    def forward(self):
+        if self.train_uresnet:
+            return self.forward_uresnet()
+        else:
+            return self.forward_ppn()
 
 if __name__ == '__main__':
     class MyCfg:

@@ -113,11 +113,17 @@ def train_ppn(cfg):
 
 def train_classification(cfg):
     # Define data generators
-    train_toydata = ToydataGenerator(cfg, classification=True)
-    test_toydata = ToydataGenerator(cfg, classification=True)
+    if cfg.TOYDATA:
+        train_data = ToydataGenerator(cfg, classification=True)
+        test_data = ToydataGenerator(cfg, classification=True)
+    else:
+        filelist = get_filelist(cfg.DATA)
+        train_data = LarcvGenerator(cfg, ioname="train", filelist=filelist)
+        test_data = LarcvGenerator(cfg, ioname="test", filelist=filelist)
+
     net_args = {}
 
-    t = Trainer(basenets[cfg.BASE_NET], train_toydata, test_toydata, cfg)
+    t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg)
     t.train(net_args)
 
 if __name__ == '__main__':

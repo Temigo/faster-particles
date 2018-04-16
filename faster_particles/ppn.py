@@ -14,7 +14,7 @@ import sys, os
 from faster_particles.ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
     predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer
-from faster_particles.base_net import VGG
+from faster_particles.base_net.vgg import VGG
 
 class PPN(object):
 
@@ -42,11 +42,12 @@ class PPN(object):
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
-        im_proposals, im_labels, im_scores, rois, summary = sess.run([
+        im_proposals, im_labels, im_scores, rois, scores2, summary = sess.run([
             self._predictions['im_proposals'],
             self._predictions['im_labels'],
             self._predictions['im_scores'],
             self._predictions['rois'],
+            self._predictions['ppn2_scores'],
             self.summary_op
             ], feed_dict=feed_dict)
         return summary, {'im_proposals': im_proposals,

@@ -1,69 +1,6 @@
-# Define some base networks for PPN
-# Currently only VGG is implemented.
-# To add more base networks inherit from BaseNet class and update basenets variable.
-
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
-
-class BaseNet(object):
-    """
-    Skeleton class from which any base network should inherit.
-    PPN will assume this class structure for the base network.
-    """
-    def __init__(self, cfg):
-        self.N = cfg.IMAGE_SIZE
-        self.num_classes = cfg.NUM_CLASSES
-        self.learning_rate = 0.001
-        self.is_3d = cfg.DATA_3D
-
-    def init_placeholders(self):
-        """
-        Define placeholders here as class attributes.
-        @return: List of tuples (attribute_name, tf_name)
-        """
-        raise NotImplementedError
-
-    def restore_placeholder(self, names):
-        """
-        For the test network to restore the placeholders previously created
-        by the train network.
-        @param names List of tuples (attribute_name, tf_name)
-        """
-        raise NotImplementedError
-
-    def test_image(self, sess, blob):
-        """
-        Run inference on a single image.
-        @param sess Tensorflow current session.
-        @param blob Data dictionary.
-        @return: summary, dictionary of results
-        """
-        raise NotImplementedError
-
-    def train_step_with_summary(self, sess, blobs):
-        """
-        Run training step.
-        @param sess Tensorflow current session.
-        @param blob Data dictionary.
-        @return: summary, dictionary of results
-        """
-        raise NotImplementedError
-
-    def build_base_net(self, image_placeholder, is_training=True, reuse=False):
-        """
-        Called by PPN and by the base net during training.
-        @return: F3 and F5 layers
-        """
-        raise NotImplementedError
-
-    def create_architecture(self, is_training=True, reuse=False, scope="base_net"):
-        """
-        Called to train the base network only.
-        @param scope Scope name to be shared between base network and PPN.
-        """
-        raise NotImplementedError
-
+from base_net import BaseNet
 
 class VGG(BaseNet):
     def init_placeholders(self):
@@ -75,19 +12,12 @@ class VGG(BaseNet):
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
         return [("image_placeholder", "image"), ("labels_placeholder", "labels"), ("learning_rate_placeholder", "lr")]
 
-    def restore_placeholder(self, names):
-        for attr, name in names:
-            setattr(self, attr, tf.get_default_graph().get_tensor_by_name(name + ':0'))
+    def feed_dict(self, blob):
+        return { self.image_placeholder: blob['data'], self.labels_placeholder: blob['image_label'], self.learning_rate_placeholder: self.learning_rate }
 
     def test_image(self, sess, blob):
-        feed_dict = { self.image_placeholder: blob['data'], self.labels_placeholder: blob['image_label'], self.learning_rate_placeholder: self.learning_rate }
-        acc, cls_pred, summary = sess.run([self.accuracy, self.cls_pred, self.summary_op], feed_dict=feed_dict)
+        acc, cls_pred, summary = sess.run([self.accuracy, self.cls_pred, self.summary_op], feed_dict=self.feed_dict(blob))
         return summary, {'acc': acc, 'cls_pred': cls_pred}
-
-    def train_step_with_summary(self, sess, blobs):
-        feed_dict = { self.image_placeholder: blobs['data'], self.labels_placeholder: blobs['image_label'], self.learning_rate_placeholder: self.learning_rate }
-        _, summary = sess.run([self.train_op, self.summary_op], feed_dict=feed_dict)
-        return summary, {}
 
     def build_base_net(self, image_placeholder, is_training=True, reuse=False):
         # =====================================================
@@ -112,10 +42,12 @@ class VGG(BaseNet):
                                 weights_regularizer=weights_regularizer,
                                 biases_regularizer=biases_regularizer,
                                 biases_initializer=tf.constant_initializer(0.0)):
-                net = slim.repeat(image_placeholder, 2, conv, num_channels, [3,] * dim,
-                                  trainable=is_training, scope='conv1')
-                net = max_pool(net, [2,] * dim, padding='SAME', scope='pool1')
-                net = slim.repeat(net, 2, conv, 2 * num_channels, [3,] * dim,
+                #net = slim.repeat(image_placeholder, 2, conv, num_channels, [3,] * dim,
+                #                  trainable=is_training, scope='conv1')
+                #net = max_pool(net, [2,] * dim, padding='SAME', scope='pool1')
+                #net = slim.repeat(image_placeholder, 2, conv, 2 * num_channels, [3,] * dim,
+                #                trainable=is_training, scope='conv2')
+                net = slim.repeat(image_placeholder, 1, conv, 2 * num_channels, [3,] * dim, stride=3,
                                 trainable=is_training, scope='conv2')
                 net = max_pool(net, [2,] * dim, padding='SAME', scope='pool2')
                 net = slim.repeat(net, 3, conv, 4 * num_channels, [3,] * dim,
@@ -163,13 +95,13 @@ class VGG(BaseNet):
             # Define summary
             self.summary_op = tf.summary.merge_all()
 
-# Available base networks
-basenets = { "vgg": VGG }
-
 if __name__ == '__main__':
     class config(object):
         IMAGE_SIZE = 512
         NUM_CLASSES = 3
         LEARNING_RATE = 0.001
+        DATA_3D = False
     v = VGG(cfg=config())
     print(dir(v))
+    v.init_placeholders()
+    v.create_architecture()

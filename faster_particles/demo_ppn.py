@@ -43,8 +43,9 @@ def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     poly.set_facecolor(facecolors)
     ax.add_collection3d(poly)
 
-def filter_points(im_proposals, im_scores):
-    db = DBSCAN(eps=9.0, min_samples=1).fit_predict(im_proposals)
+def filter_points(im_proposals, im_scores, eps):
+    db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
+    print(db)
     keep = {}
     index = {}
     for i in range(len(db)):
@@ -57,11 +58,23 @@ def filter_points(im_proposals, im_scores):
         new_proposals.append(im_proposals[index[cluster]])
     return np.array(new_proposals)
 
+def distance_to_nearest_neighbour(cfg, im_proposals):
+    # FIXME vectorize loop
+    distances = []
+    for point in im_proposals:
+        distances.append(np.partition(np.sum(np.power(point - im_proposals, 2), axis=1), 2)[1])
+    bins = np.linspace(0, 100, 100)
+    plt.hist(distances, bins)
+    plt.xlabel("distance to nearest neighbour")
+    plt.ylabel("#proposals")
+    plt.savefig(os.path.join(cfg.DISPLAY_DIR, 'distance_to_nearest_neighbour.png'))
+    return distances
+
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display'):
-    #print(im_proposals)
-    #print(im_scores)
-    #print(im_labels)
+    print(im_proposals)
+    print(im_scores)
+    print(im_labels)
 
     N = blob['data'].shape[1]
     N2 = int(N/dim1) # F3 size
@@ -143,7 +156,10 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
 
     if im_proposals is not None and im_scores is not None:
         if len(im_proposals) > 0:
-            im_proposals = filter_points(im_proposals, im_scores)
+            eps = 20.0 #9.0
+            if cfg.DATA_3D:
+                eps = 15.0 # FIXME
+            im_proposals = filter_points(im_proposals, im_scores, eps)
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
             #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
@@ -170,7 +186,6 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
-    print(im_proposals)
     return im_proposals
 
     """if cfg.DATA_3D and im_proposals is not None and im_scores is not None:
@@ -291,11 +306,12 @@ def inference(cfg):
                 im_scores.extend(results['im_scores'])
                 im_proposals_filtered = display(blob, cfg, index=i, dim1=net.dim1, dim2=net.dim2, **results)
                 distances.extend(closest_gt_distance(im_proposals_filtered, blob['gt_pixels']))
+                im_proposals.extend(results['im_proposals'])
             else:
                 print(blob, results)
     statistics(cfg, im_proposals, im_labels, im_scores)
     distances_plot(cfg, distances)
-
+    distance_to_nearest_neighbour(cfg, im_proposals)
 
 if __name__ == '__main__':
     inference(cfg)

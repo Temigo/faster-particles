@@ -2,7 +2,8 @@
 This package includes the following:
 * Toydata generator
 * LArCV data interface (2D and 3D)
-* Pixel Proposal Network implementation using Tensorflow
+* Base network: VGG(ish) and UResNet
+* Pixel Proposal Network implementation
 
 ## Installation
 ### Dependencies
@@ -15,9 +16,10 @@ cd larcv2
 source configure.sh
 make
 ```
+You will also need Tensorflow.
 
 ### Install
-Then install `faster-particles` with Pip:
+The easiest way is to use Pip:
 ```bash
 pip install faster-particles
 ```
@@ -33,23 +35,25 @@ cd faster-particles
 **The following assumes you installed with pip. If you cloned the source, make
 sure you are in the root directory and replace `ppn` with `python faster_particles/bin/ppn.py`.**
 
+### Dataset
 To use toydata rather than LArCV data in the following sections, use option `--toydata`.
-LArCV data files can be specified with `--data` option. They can use regex, e.g. `ppn_p[01]*.root`.
+LArCV data files should be specified with `--data` option which supports regex, e.g. `ppn_p[01]*.root`.
 
 ### Training
 The program output is divided between:
 * Output directory: with all the weights
 * Log directory: to store all Tensorflow logs (and visualize them with Tensorboard)
 * Display directory: stores regular snapshots taken during training of PPN1 and PPN2 proposals compared to ground truth.
+The directories will be created if they do not exist yet.
 
 To train PPN on 1000 steps use:
 ```bash
 ppn train -o output/dir/ -l log/dir/ -d display/dir -n ppn -m 1000 --data path/to/data
 ```
 
-To train the base network (currently only VGG available) on track/shower classification task use:
+To train the base network (currently VGG and UResNet available) on track/shower classification task use:
 ```bash
-ppn train -o output/dir/ -l log/dir/ -d display/dir -n base -m 1000
+ppn train -o output/dir/ -l log/dir/ -d display/dir --net base --base-net vgg -m 1000
 ```
 
 To train on 3D data, use the argument `-3d` and don't forget to specify the image size with `-N` argument (e.g. 192 for a compression factor of 4, see `larcvdata_generator.py` for more details).
