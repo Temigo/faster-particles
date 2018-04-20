@@ -30,8 +30,8 @@ class UResNet(BaseNet):
         return { self.image_placeholder: blob['data'], self.pixel_labels_placeholder: blob['labels'], self.learning_rate_placeholder: self.learning_rate }
 
     def test_image(self, sess, blob):
-        cls_pred, summary = sess.run([self._softmax, self.summary_op], feed_dict=self.feed_dict(blob))
-        return summary, {'cls_pred': cls_pred}
+        predictions, summary = sess.run([self._predictions, self.summary_op], feed_dict=self.feed_dict(blob))
+        return summary, {'predictions': predictions}
 
     def resnet_module(self, input_tensor, num_outputs, trainable=True, kernel=(3,3), stride=1, scope='noscope'):
         num_inputs  = input_tensor.get_shape()[-1].value
@@ -122,7 +122,7 @@ class UResNet(BaseNet):
         key = keys[int(len(keys)/2.0)]
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
-    def create_architecture(self, is_training=True, reuse=False, scope="uresnet_full"):
+    def create_architecture(self, is_training=True, reuse=False, scope="uresnet"):
         self.is_training = is_training
         self.reuse = reuse
         with tf.variable_scope(scope, reuse=self.reuse):
@@ -175,6 +175,9 @@ class UResNet(BaseNet):
                               scope = 'conv2')
 
                 self._softmax = tf.nn.softmax(logits=net)
+                print(self._softmax)
+                self._predictions = tf.argmax(self._softmax, axis=-1)
+                print(self._predictions)
 
             # Define loss
             dims = self.image_placeholder.get_shape()[1:]
@@ -203,7 +206,7 @@ if __name__ == '__main__':
         IMAGE_SIZE = 512
         NUM_CLASSES = 3
         LEARNING_RATE = 0.001
-        DATA_3D = False
+        DATA_3D = True
     v = UResNet(cfg=config())
     print(dir(v))
     v.init_placeholders()

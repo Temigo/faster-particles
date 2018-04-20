@@ -70,6 +70,77 @@ def distance_to_nearest_neighbour(cfg, im_proposals):
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, 'distance_to_nearest_neighbour.png'))
     return distances
 
+def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
+    # Display original image
+    if cfg.DATA_3D:
+        for i in range(len(blob['voxels'])):
+            voxel = blob['voxels'][i]
+            if 'voxels_value' in blob:
+
+                if blob['voxels_value'][i] == 1: # track
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='red', alpha=0.3, linewidths=0.0, edgecolors='black')
+                elif blob['voxels_value'][i] == 2: # shower
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='blue', alpha=0.3, linewidths=0.0, edgecolors='black')
+                else:
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='black', alpha=0.3, linewidths=0.0, edgecolors='black')
+            else:
+                draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
+    else:
+        ax.imshow(blob['data'][0,...,0], cmap=cmap, interpolation='none', origin='lower', vmin=vmin, vmax=vmax)
+
+def set_image_limits(cfg, ax):
+    ax.set_xlim(0, cfg.IMAGE_SIZE)
+    ax.set_ylim(0, cfg.IMAGE_SIZE)
+    if cfg.DATA_3D:
+        ax.set_zlim(0, cfg.IMAGE_SIZE)
+
+def extract_voxels(data):
+    indices = np.where(data > 0)
+    return np.stack(indices).T, data[indices]
+
+def display_uresnet(blob, cfg, index=0, predictions=None, name='display'):
+    kwargs = {}
+    if cfg.DATA_3D:
+        kwargs['projection'] = '3d'
+        blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0,...,0])
+
+    if predictions is not None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, aspect='equal', **kwargs)
+
+        display_original_image(blob, cfg, ax, vmax=10)
+
+        set_image_limits(cfg, ax)
+
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_original_%d.png' % index))
+        plt.close(fig)
+
+        fig2 = plt.figure()
+        ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
+        blob_label = {}
+        blob_label['data'] = blob['labels'][0,...]
+        blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
+        display_original_image(blob_label, cfg, ax2, vmax=3.1, cmap='tab10')
+
+        set_image_limits(cfg, ax2)
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_labels_%d.png' % index))
+        plt.close(fig2)
+
+        fig3 = plt.figure()
+        ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
+        blob_pred = {}
+        blob_pred['data'] = predictions[0,...]
+        blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0,...])
+        print(blob_pred['voxels'], blob_pred['voxels_value'])
+        display_original_image(blob_pred, cfg, ax3, vmax=3.1)
+
+        set_image_limits(cfg, ax3)
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
+        plt.close(fig3)
+
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display'):
     print(im_proposals)
@@ -86,25 +157,20 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
 
-    # Display original image
-    if cfg.DATA_3D:
-        for voxel in blob['voxels']:
-            draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='blue', alpha=0.3, linewidths=0.1, edgecolors='black')
-    else:
-        ax.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+    display_original_image(blob, cfg, ax)
 
     # display gt pixels
     if cfg.DATA_3D:
         for gt_pixel in blob['gt_pixels']:
             x, y, z = gt_pixel[2], gt_pixel[1], gt_pixel[0]
             draw_voxel(x, y, z, 1, ax, facecolors='red', alpha=1.0, linewidths=0.3, edgecolors='red')
-    else:
+    """else:
         for gt_pixel in blob['gt_pixels']:
             x, y = gt_pixel[1], gt_pixel[0]
             if gt_pixel[2] == 1:
                 plt.plot([x], [y], 'ro')
             elif gt_pixel[2] == 2:
-                plt.plot([x], [y], 'go')
+                plt.plot([x], [y], 'go')"""
 
 
     if rois is not None:
@@ -134,10 +200,8 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
                     )
                 )
 
-    ax.set_xlim(0, cfg.IMAGE_SIZE)
-    ax.set_ylim(0, cfg.IMAGE_SIZE)
-    if cfg.DATA_3D:
-        ax.set_zlim(0, cfg.IMAGE_SIZE)
+    set_image_limits(cfg, ax)
+
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_proposals_%d.png' % index))
     plt.close(fig)
@@ -179,50 +243,11 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
                     plt.plot([x], [y], 'go')
                 else:
                     raise Exception("Label unknown")
-    ax2.set_xlim(0, cfg.IMAGE_SIZE)
-    ax2.set_ylim(0, cfg.IMAGE_SIZE)
-    if cfg.DATA_3D:
-        ax2.set_zlim(0, cfg.IMAGE_SIZE)
+    set_image_limits(cfg, ax2)
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
     plt.close(fig2)
     return im_proposals
-
-    """if cfg.DATA_3D and im_proposals is not None and im_scores is not None:
-        gt = len(blob['gt_pixels']) # number of gt pixels
-        fig3 = plt.figure(figsize=(20, 20*gt))
-        fig3, subplots = plt.subplots(gt, 3)
-        for j in range(gt):
-            gt_pixel = blob['gt_pixels'][j]
-            #ax_x = fig3.add_subplot(gt, 3, 3*j+1, aspect='auto')
-            #ax_y = fig3.add_subplot(gt, 3, 3*j+2, aspect='auto')
-            #ax_z = fig3.add_subplot(gt, 3, 3*j+3, aspect='auto')
-            ax_x = subplots[j][0]
-            ax_y = subplots[j][1]
-            ax_z = subplots[j][2]
-            x, y, z = int(gt_pixel[2]), int(gt_pixel[1]), int(gt_pixel[0])
-            ax_x.imshow(blob['data'][0,x,:,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
-            ax_y.imshow(blob['data'][0,:,y,:,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
-            ax_z.imshow(blob['data'][0,:,:,z,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
-            for i in range(len(im_proposals)):
-                proposal = im_proposals[i]
-                xi, yi, zi = proposal[2], proposal[1], proposal[0]
-                if im_labels[i] == 0: # Track
-                    ax_x.scatter(yi, zi, c='yellow', marker='o', s=0.5)
-                    ax_y.plot([xi], [zi], 'yo')
-                    ax_z.plot([xi], [yi], 'yo')
-                elif im_labels[i] == 1: #Shower
-                    ax_x.plot([yi], [zi], 'go')
-                    ax_y.plot([xi], [zi], 'go')
-                    ax_z.plot([xi], [yi], 'go')
-            ax_x.set_xlim(0, cfg.IMAGE_SIZE)
-            ax_x.set_ylim(0, cfg.IMAGE_SIZE)
-            ax_y.set_xlim(0, cfg.IMAGE_SIZE)
-            ax_y.set_ylim(0, cfg.IMAGE_SIZE)
-            ax_z.set_xlim(0, cfg.IMAGE_SIZE)
-            ax_z.set_ylim(0, cfg.IMAGE_SIZE)
-        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_projections_%d.png' % index), dpi=200)
-        plt.close(fig3)"""
 
 def statistics(cfg, im_proposals, im_labels, im_scores):
     track_scores = []
@@ -278,14 +303,14 @@ def distances_plot(cfg, distances):
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, 'distances4.png'))
 
 def inference(cfg):
-    if cfg.NET == 'ppn':
-        if cfg.TOYDATA:
+    if cfg.TOYDATA:
+        if cfg.NET == 'ppn':
             data = ToydataGenerator(cfg)
         else:
-            filelist = get_filelist(cfg.DATA)
-            data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
+            data = ToydataGenerator(cfg, classification=True)
     else:
-        data = ToydataGenerator(cfg, classification=True)
+        filelist = get_filelist(cfg.DATA)
+        data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
 
     if cfg.NET == 'ppn':
         net = PPN(cfg=cfg)
@@ -308,7 +333,10 @@ def inference(cfg):
                 distances.extend(closest_gt_distance(im_proposals_filtered, blob['gt_pixels']))
                 im_proposals.extend(results['im_proposals'])
             else:
-                print(blob, results)
+                if cfg.BASE_NET == 'uresnet':
+                    display_uresnet(blob, cfg, index=i, **results)
+                else:
+                    print(blob, results)
     statistics(cfg, im_proposals, im_labels, im_scores)
     distances_plot(cfg, distances)
     distance_to_nearest_neighbour(cfg, im_proposals)

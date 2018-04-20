@@ -47,14 +47,14 @@ class Trainer(object):
             saver_base_net.restore(sess, self.weights_file)
             print("Done.")
 
-    def train(self, net_args):
+    def train(self, net_args, scope="ppn"):
         print("Creating net architecture...")
         net_args['cfg'] = self.cfg
         self.train_net = self.net(**net_args)
         self.test_net = self.net(**net_args)
         self.test_net.restore_placeholder(self.train_net.init_placeholders())
-        self.train_net.create_architecture(is_training=True, reuse=False, scope="ppn")
-        self.test_net.create_architecture(is_training=False, reuse=True, scope="ppn")
+        self.train_net.create_architecture(is_training=True, reuse=False, scope=scope)
+        self.test_net.create_architecture(is_training=False, reuse=True, scope=scope)
         print("Done.")
 
         #with tf.Session() as sess:
@@ -124,7 +124,7 @@ def train_classification(cfg):
     net_args = {}
 
     t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg)
-    t.train(net_args)
+    t.train(net_args, scope=cfg.BASE_NET)
 
 if __name__ == '__main__':
     #train_ppn(cfg)

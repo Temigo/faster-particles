@@ -42,12 +42,12 @@ class VGG(BaseNet):
                                 weights_regularizer=weights_regularizer,
                                 biases_regularizer=biases_regularizer,
                                 biases_initializer=tf.constant_initializer(0.0)):
-                #net = slim.repeat(image_placeholder, 2, conv, num_channels, [3,] * dim,
-                #                  trainable=is_training, scope='conv1')
-                #net = max_pool(net, [2,] * dim, padding='SAME', scope='pool1')
-                #net = slim.repeat(image_placeholder, 2, conv, 2 * num_channels, [3,] * dim,
+                net = slim.repeat(image_placeholder, 2, conv, num_channels, [3,] * dim,
+                                  trainable=is_training, scope='conv1')
+                net = max_pool(net, [2,] * dim, padding='SAME', scope='pool1')
+                #net = slim.repeat(net, 2, conv, 2 * num_channels, [3,] * dim,
                 #                trainable=is_training, scope='conv2')
-                net = slim.repeat(image_placeholder, 1, conv, 2 * num_channels, [3,] * dim, stride=3,
+                net = slim.repeat(net, 1, conv, 2 * num_channels, [3,] * dim, #stride=3,
                                 trainable=is_training, scope='conv2')
                 net = max_pool(net, [2,] * dim, padding='SAME', scope='pool2')
                 net = slim.repeat(net, 3, conv, 4 * num_channels, [3,] * dim,
@@ -63,7 +63,7 @@ class VGG(BaseNet):
                 # the feature map should be spatial dimensions 16x16.
             return net, net2
 
-    def create_architecture(self, is_training=True, reuse=False, scope="vgg_full"):
+    def create_architecture(self, is_training=True, reuse=False, scope="vgg"):
         self.is_training = is_training
         self.reuse = reuse
         # Define network
