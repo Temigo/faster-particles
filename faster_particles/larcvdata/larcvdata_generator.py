@@ -38,7 +38,7 @@ class LarcvGenerator(object):
                 replace = 4
                 config_file = 'uresnet_3d.cfg'
             else:
-                replace = 8
+                replace = 6
                 config_file = 'ppn_3d.cfg'
         else:
             if self.train_uresnet:

@@ -42,7 +42,7 @@ class PPNConfig(object):
     #DATA = "/stage/drinkingkazu/u-resnet/vertex_data/out.root" # For UResNet 3D
     # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
     # DATA = ""
-    DATA = "/data/drinkingkazu/scratch/copy.root"
+    DATA = "/data/ldomine/copy.root"
     DATA_3D = False
 
     # Track configuration
