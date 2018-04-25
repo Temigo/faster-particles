@@ -34,10 +34,11 @@ class LarcvGenerator(object):
         self.train_uresnet = (cfg.NET == 'base' and cfg.BASE_NET == 'uresnet')
         print('train_uresnet = ', self.train_uresnet)
         if cfg.DATA_3D:
-            replace = 8
             if self.train_uresnet:
+                replace = 4
                 config_file = 'uresnet_3d.cfg'
             else:
+                replace = 8
                 config_file = 'ppn_3d.cfg'
         else:
             if self.train_uresnet:
@@ -74,9 +75,6 @@ class LarcvGenerator(object):
     def __delete__(self):
         self.proc.stop_manager()
         self.proc.reset()
-
-    def num_classes(self):
-        return 4
 
     def forward_uresnet(self):
         self.proc.next()

@@ -5,10 +5,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import matplotlib
-matplotlib.use('Agg')
 import tensorflow as tf
-import sys, os
+import os
 
 from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator

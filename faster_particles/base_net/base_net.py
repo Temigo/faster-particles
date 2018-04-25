@@ -12,7 +12,7 @@ class BaseNet(object):
     def __init__(self, cfg):
         self.N = cfg.IMAGE_SIZE
         self.num_classes = cfg.NUM_CLASSES
-        self.learning_rate = 0.001
+        self.learning_rate = cfg.LEARNING_RATE
         self.is_3d = cfg.DATA_3D
 
     def init_placeholders(self):

@@ -302,6 +302,39 @@ def distances_plot(cfg, distances):
     plt.ylabel("#\"chosen\" pixels")
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, 'distances4.png'))
 
+def inference_simple(cfg, net, weights_file, num_test=10):
+    if cfg.TOYDATA:
+        if cfg.NET == 'ppn':
+            data = ToydataGenerator(cfg)
+        else:
+            data = ToydataGenerator(cfg, classification=True)
+    else:
+        filelist = get_filelist(cfg.DATA)
+        data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
+
+    net.init_placeholders()
+    net.create_architecture(is_training=False)
+    saver = tf.train.Saver()
+    inference = []
+    with tf.Session() as sess:
+        saver.restore(sess, weights_file)
+        for i in range(num_test):
+            blob = data.forward()
+            summary, results = net.test_image(sess, blob)
+            inference.append(results)
+    return inference
+
+def inference_full(cfg):
+    num_test = 10
+    # First base
+    net_base = basenets[cfg.BASE_NET](cfg=cfg)
+    inference_base = inference_simple(cfg, net, cfg.WEIGHTS_BASE_FILE, num_test=num_test)
+    # Then PPN
+    net_ppn = PPN(cfg=cfg)
+    inference_ppn = inference_simple(cfg, net, cfg.WEIGHTS_FILE, num_test=num_test)
+    print(inference_base, inference_ppn)
+    # Clustering: k-means? DBSCAN?
+
 def inference(cfg):
     if cfg.TOYDATA:
         if cfg.NET == 'ppn':
