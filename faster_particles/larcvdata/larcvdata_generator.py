@@ -32,7 +32,6 @@ class LarcvGenerator(object):
 
         # FIXME random seed
         self.train_uresnet = (cfg.NET == 'base' and cfg.BASE_NET == 'uresnet')
-        print('train_uresnet = ', self.train_uresnet)
         if cfg.DATA_3D:
             if self.train_uresnet:
                 replace = 4

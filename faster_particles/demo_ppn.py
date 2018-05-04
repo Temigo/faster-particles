@@ -154,6 +154,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     if cfg.DATA_3D:
         kwargs['projection'] = '3d'
 
+    # --- FIGURE 1 : PPN1 ROI ---
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
 
@@ -164,13 +165,13 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
         for gt_pixel in blob['gt_pixels']:
             x, y, z = gt_pixel[2], gt_pixel[1], gt_pixel[0]
             draw_voxel(x, y, z, 1, ax, facecolors='red', alpha=1.0, linewidths=0.3, edgecolors='red')
-    """else:
+    else:
         for gt_pixel in blob['gt_pixels']:
             x, y = gt_pixel[1], gt_pixel[0]
             if gt_pixel[2] == 1:
                 plt.plot([x], [y], 'ro')
             elif gt_pixel[2] == 2:
-                plt.plot([x], [y], 'go')"""
+                plt.plot([x], [y], 'go')
 
 
     if rois is not None:
@@ -206,10 +207,9 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_proposals_%d.png' % index))
     plt.close(fig)
 
+    # --- FIGURE 2 : PPN2 predictions ---
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    #ax2.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
-    #ax2.voxels(blob['voxels'], facecolors='blue')
 
     # Display original image
     if cfg.DATA_3D:

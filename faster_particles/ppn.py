@@ -71,9 +71,6 @@ class PPN(object):
                             self.summary_op
                             ], feed_dict=feed_dict)
 
-        print(blobs['gt_pixels'])
-        print("#positives: ", np.sum(ppn2_positives))
-
         return summary, {'rois': rois,
                         'im_labels': im_labels,
                         'im_proposals': im_proposals,
@@ -131,7 +128,7 @@ class PPN(object):
                             biases_initializer=tf.constant_initializer(0.0)):
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Returns F3 and F5 feature maps
-                net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=self.is_training, reuse=self.reuse)
+                net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=(self.is_training and not self.cfg.FREEZE), reuse=self.reuse)
                 self.set_dimensions(net.shape, net2.shape)
                 self.set3d()
 

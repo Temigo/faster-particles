@@ -24,6 +24,7 @@ class PPNConfig(object):
     LAMBDA_PPN1 = 0.5
     LAMBDA_PPN2 = 0.5
     WEIGHTS_FILE = None # Path to pretrained checkpoint
+    FREEZE = False # Whether to freeze the weights of base net
     NET = 'ppn'
     BASE_NET = 'vgg'
     MAX_STEPS = 100
@@ -42,7 +43,7 @@ class PPNConfig(object):
     #DATA = "/stage/drinkingkazu/u-resnet/vertex_data/out.root" # For UResNet 3D
     # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
     # DATA = ""
-    DATA = "/data/ldomine/copy.root"
+    DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
     DATA_3D = False
 
     # Track configuration
@@ -84,6 +85,7 @@ class PPNConfig(object):
         self.train_parser.add_argument("-lppn2", "--lambda-ppn2", default=self.LAMBDA_PPN2, type=float, help="Lambda PPN2")
         self.train_parser.add_argument("-w", "--weights-file", help="Tensorflow .ckpt file to load weights of trained model.")
         self.train_parser.add_argument("-wl", "--weight-loss", default=self.WEIGHT_LOSS, action='store_true', help="Weight the loss (balance track and shower)")
+        self.train_parser.add_argument("-f", "--freeze", default=self.FREEZE, action='store_true', help="Freeze the base net weights.")
 
         self.demo_parser = subparsers.add_parser("demo", help="Run Pixel Proposal Network demo.")
         self.demo_parser.add_argument("weights_file", help="Tensorflow .ckpt file to load weights of trained model.")
@@ -122,9 +124,14 @@ class PPNConfig(object):
     def parse_args(self):
         args = self.parser.parse_args()
         self.update(vars(args))
+        print("\n\n-- CONFIG --")
+        for v in vars(self):
+            print("%s = %r" % (v, getattr(self, v)))
+        print("\n\n")
         if self.NET == 'base' and args.script == 'train':
             args.func = train_classification
-        print self.NUM_CLASSES
+        if self.FREEZE and len(self.WEIGHTS_FILE) == 0:
+            print("WARNING You are freezing the base net weights without loading any checkpoint file.")
         args.func(self)
 
     def update(self, args):
