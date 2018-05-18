@@ -14,17 +14,17 @@ class UResNet(BaseNet):
 
         self.conv_feature_map = {}
         self.base_num_outputs = 16
-        self._num_strides = 5
+        self._num_strides = 3
 
     def init_placeholders(self):
         if self.is_3d:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image")
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image_uresnet")
             self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N, self.N), name="image_label")
         else:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image")
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image_uresnet")
             self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N), name="image_label")
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
-        return [("image_placeholder", "image"), ("learning_rate_placeholder", "lr"), ("pixel_labels_placeholder", "image_label")]
+        return [("image_placeholder", "image_uresnet"), ("learning_rate_placeholder", "lr"), ("pixel_labels_placeholder", "image_label")]
 
     def feed_dict(self, blob):
         return { self.image_placeholder: blob['data'], self.pixel_labels_placeholder: blob['labels'], self.learning_rate_placeholder: self.learning_rate }
@@ -119,18 +119,18 @@ class UResNet(BaseNet):
 
         keys = np.sort(self.conv_feature_map.keys())
         key2 = keys[-1]
-        key = keys[int(len(keys)/2.0)]
+        key = keys[int(len(keys)/2.0)] # FIXME -1
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
     def create_architecture(self, is_training=True, reuse=False, scope="uresnet"):
         self.is_training = is_training
         self.reuse = reuse
-        with tf.variable_scope(scope, reuse=self.reuse):
-            with slim.arg_scope([self.fn_conv, self.fn_conv_transpose, slim.fully_connected],
-                                normalizer_fn=slim.batch_norm,
-                                trainable=is_training):
-                _, net = self.build_base_net(self.image_placeholder, is_training=is_training, reuse=reuse)
 
+        with slim.arg_scope([self.fn_conv, self.fn_conv_transpose, slim.fully_connected],
+                            normalizer_fn=slim.batch_norm,
+                            trainable=is_training):
+            _, net = self.build_base_net(self.image_placeholder, is_training=is_training, reuse=reuse)
+            with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
                 for step in xrange(self._num_strides):
                     num_outputs = net.get_shape()[-1].value / 2
@@ -175,9 +175,7 @@ class UResNet(BaseNet):
                               scope = 'conv2')
 
                 self._softmax = tf.nn.softmax(logits=net)
-                print(self._softmax)
                 self._predictions = tf.argmax(self._softmax, axis=-1)
-                print(self._predictions)
 
             # Define loss
             dims = self.image_placeholder.get_shape()[1:]

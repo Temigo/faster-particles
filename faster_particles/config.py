@@ -1,10 +1,10 @@
 import argparse
 import os
-from demo_ppn import inference
+
+from demo_ppn import inference, inference_full
 from train_ppn import train_ppn, train_classification
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 # Control Tensorflow verbose level with TF_CPP_MIN_LOG_LEVEL
 # it defaults to 0 (all logs shown), but can be set to 1 to filter out INFO logs,
 # 2 to additionally filter out WARNING logs, and 3 to additionally filter out ERROR logs
@@ -24,6 +24,8 @@ class PPNConfig(object):
     LAMBDA_PPN1 = 0.5
     LAMBDA_PPN2 = 0.5
     WEIGHTS_FILE = None # Path to pretrained checkpoint
+    WEIGHTS_FILE_BASE = None
+    WEIGHTS_FILE_PPN = None
     FREEZE = False # Whether to freeze the weights of base net
     NET = 'ppn'
     BASE_NET = 'vgg'
@@ -43,7 +45,8 @@ class PPNConfig(object):
     #DATA = "/stage/drinkingkazu/u-resnet/vertex_data/out.root" # For UResNet 3D
     # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
     # DATA = ""
-    DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
+    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
+    DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
     DATA_3D = False
 
     # Track configuration
@@ -63,8 +66,12 @@ class PPNConfig(object):
     SHOWER_N_IMAGES = 2
     SHOWER_OUT_PNG = False
 
+    # Environment variables
+    CUDA_VISIBLE_DEVICES = '0,1,2,3'
+
     def __init__(self):
         self.create_parsers()
+        os.environ['CUDA_VISIBLE_DEVICES'] = self.CUDA_VISIBLE_DEVICES
 
     def create_parsers(self):
         self.parser = argparse.ArgumentParser(description="Pixel Proposal Network")
@@ -73,7 +80,6 @@ class PPNConfig(object):
         self.train_parser = subparsers.add_parser("train", help="Train Pixel Proposal Network")
         self.train_parser.add_argument("-o", "--output-dir", action='store', type=str, required=True, help="Path to output directory.")
         self.train_parser.add_argument("-l", "--log-dir", action='store', type=str, required=True, help="Path to log directory.")
-        self.train_parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
         self.train_parser.add_argument("-c", "--num-classes", default=self.NUM_CLASSES, type=int, help="Number of classes (including background).")
         self.train_parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
         self.train_parser.add_argument("-r", "--r", default=self.R, type=int, help="Max number of ROIs from PPN1")
@@ -83,26 +89,29 @@ class PPNConfig(object):
         self.train_parser.add_argument("-lppn", "--lambda-ppn", default=self.LAMBDA_PPN, type=float, help="Lambda PPN (for loss weighting)")
         self.train_parser.add_argument("-lppn1", "--lambda-ppn1", default=self.LAMBDA_PPN1, type=float, help="Lambda PPN1")
         self.train_parser.add_argument("-lppn2", "--lambda-ppn2", default=self.LAMBDA_PPN2, type=float, help="Lambda PPN2")
-        self.train_parser.add_argument("-w", "--weights-file", help="Tensorflow .ckpt file to load weights of trained model.")
         self.train_parser.add_argument("-wl", "--weight-loss", default=self.WEIGHT_LOSS, action='store_true', help="Weight the loss (balance track and shower)")
         self.train_parser.add_argument("-f", "--freeze", default=self.FREEZE, action='store_true', help="Freeze the base net weights.")
 
         self.demo_parser = subparsers.add_parser("demo", help="Run Pixel Proposal Network demo.")
-        self.demo_parser.add_argument("weights_file", help="Tensorflow .ckpt file to load weights of trained model.")
-        self.demo_parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
+        self.demo_full_parser = subparsers.add_parser("demo-full", help="Run Pixel Proposal Network combined with base UResNet demo.")
 
         self.common_arguments(self.train_parser)
         self.common_arguments(self.demo_parser)
+        self.common_arguments(self.demo_full_parser)
 
         self.demo_parser.set_defaults(func=inference)
+        self.demo_full_parser.set_defaults(func=inference_full)
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
+        parser.add_argument("-wb", "--weights-file-base", help="Tensorflow .ckpt file to load weights of trained base network.")
+        parser.add_argument("-wp", "--weights-file-ppn", help="Tensorflow .ckpt file to load weights of trained PPN.") # does not load base net weights
+        parser.add_argument("-gpu", "--gpu", default=self.CUDA_VISIBLE_DEVICES, type=str, help="CUDA visible devices list (in a string and separated by commas).")
         parser.add_argument("-3d", "--data-3d", default=self.DATA_3D, action='store_true', help="Use 3D instead of 2D.")
         parser.add_argument("-data", "--data", default=self.DATA, type=str, help="Path to data files. Can use ls regex format.")
         parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
-        parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base'], help="Whether to train base net or PPN net.")
+        parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base', 'full'], help="Whether to use base net or PPN net or both.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, help="Width (and height) of image.")
         parser.add_argument("-mt", "--max-tracks", default=self.MAX_TRACKS, type=int, help="Maximum number of tracks generated per image (uniform distribution).")
         parser.add_argument("-mk", "--max-kinks", default=self.MAX_KINKS, type=int, help="Maximum number of kinks generated for any track.")
@@ -120,6 +129,7 @@ class PPNConfig(object):
         parser.add_argument("-nimages", "--shower-n-images", default=self.SHOWER_N_IMAGES, type=int, help="")
         parser.add_argument("-png", "--shower-out-png", default=self.SHOWER_OUT_PNG, action='store_true')
         parser.add_argument("-ms", "--min-score", default=self.MIN_SCORE, type=float, help="Minimum score above which PPN predictions should be kept")
+        parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
 
     def parse_args(self):
         args = self.parser.parse_args()
@@ -130,7 +140,7 @@ class PPNConfig(object):
         print("\n\n")
         if self.NET == 'base' and args.script == 'train':
             args.func = train_classification
-        if self.FREEZE and len(self.WEIGHTS_FILE) == 0:
+        if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights without loading any checkpoint file.")
         args.func(self)
 

@@ -36,6 +36,9 @@ class LarcvGenerator(object):
             if self.train_uresnet:
                 replace = 4
                 config_file = 'uresnet_3d.cfg'
+            elif self.cfg.NET == 'full':
+                replace = 8
+                config_file = 'ppn_uresnet_3d.cfg'
             else:
                 replace = 6
                 config_file = 'ppn_3d.cfg'
@@ -43,6 +46,9 @@ class LarcvGenerator(object):
             if self.train_uresnet:
                 replace = 4
                 config_file = 'uresnet_2d.cfg'
+            elif self.cfg.NET == 'full':
+                replace = 8
+                config_file = 'ppn_uresnet_2d.cfg'
             else:
                 replace = 6
                 config_file = 'ppn_2d.cfg'
@@ -97,6 +103,46 @@ class LarcvGenerator(object):
         blob['labels'] = output_labels.astype(np.int32)
         return blob
 
+    def extract_voxels(self, image):
+        voxels = []
+        indices = np.nonzero(image)[0]
+        for i in indices:
+            x = i%self.N
+            i = (i-x)/self.N
+            y = i%self.N
+            i = (i-y)/self.N
+            z = i%self.N
+            voxels.append([x,y,z])
+        return voxels
+
+    def extract_gt_pixels(self, t_points, s_points):
+        gt_pixels = []
+        if self.cfg.DATA_3D:
+            for pt_index in np.arange(int(len(t_points)/3)):
+                x = t_points[ 3*pt_index     ]
+                y = t_points[ 3*pt_index + 1 ]
+                z = t_points[ 3*pt_index + 2 ]
+                if x < 0: break
+                gt_pixels.append([z, y, x, 1])
+            for pt_index in np.arange(int(len(s_points)/3)):
+                x = s_points[ 3*pt_index     ]
+                y = s_points[ 3*pt_index + 1 ]
+                z = s_points[ 3*pt_index + 2 ]
+                if x < 0: break
+                gt_pixels.append([z, y, x, 2])
+        else:
+            for pt_index in np.arange(int(len(t_points)/2)):
+                x = t_points[ 2*pt_index     ]
+                y = t_points[ 2*pt_index + 1 ]
+                if x < 0: break
+                gt_pixels.append([y, x, 1])
+            for pt_index in np.arange(int(len(s_points)/2)):
+                x = s_points[ 2*pt_index     ]
+                y = s_points[ 2*pt_index + 1 ]
+                if x < 0: break
+                gt_pixels.append([y, x, 2])
+        return gt_pixels
+
     def forward_ppn(self):
         self.proc.next(store_entries=True, store_event_ids=True)
         batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
@@ -113,7 +159,7 @@ class LarcvGenerator(object):
             t_points = batch_track.data()  [index]
             s_points = batch_shower.data() [index]
 
-            voxels = []
+            voxels = self.extract_voxels(image)
 
             """
             entry    = batch_entries.data()[index]
@@ -131,14 +177,6 @@ class LarcvGenerator(object):
                 voxels.append([x, y, z])
                 # FIXME check this is the correct entry()"""
 
-            indices = np.nonzero(image)[0]
-            for i in indices:
-                x = i%self.N
-                i = (i-x)/self.N
-                y = i%self.N
-                i = (i-y)/self.N
-                z = i%self.N
-                voxels.append([x,y,z])
             image = image.reshape(img_shape)
 
             # TODO set N from this
@@ -146,30 +184,7 @@ class LarcvGenerator(object):
             #image = image.reshape(image_dim[1:3])
             #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
             #print(t_points, s_points)
-            if self.cfg.DATA_3D:
-                for pt_index in np.arange(int(len(t_points)/3)):
-                    x = t_points[ 3*pt_index     ]
-                    y = t_points[ 3*pt_index + 1 ]
-                    z = t_points[ 3*pt_index + 2 ]
-                    if x < 0: break
-                    gt_pixels.append([z, y, x, 1])
-                for pt_index in np.arange(int(len(s_points)/3)):
-                    x = s_points[ 3*pt_index     ]
-                    y = s_points[ 3*pt_index + 1 ]
-                    z = s_points[ 3*pt_index + 2 ]
-                    if x < 0: break
-                    gt_pixels.append([z, y, x, 2])
-            else:
-                for pt_index in np.arange(int(len(t_points)/2)):
-                    x = t_points[ 2*pt_index     ]
-                    y = t_points[ 2*pt_index + 1 ]
-                    if x < 0: break
-                    gt_pixels.append([y, x, 1])
-                for pt_index in np.arange(int(len(s_points)/2)):
-                    x = s_points[ 2*pt_index     ]
-                    y = s_points[ 2*pt_index + 1 ]
-                    if x < 0: break
-                    gt_pixels.append([y, x, 2])
+            gt_pixels.extend(self.extract_gt_pixels(t_points, s_points))
             if len(gt_pixels) > 0:
                 output.append(image)
 
@@ -187,9 +202,61 @@ class LarcvGenerator(object):
         blob['voxels'] = np.array(voxels)
         return blob
 
+    def forward_ppn_uresnet(self):
+        self.proc.next(store_entries=True, store_event_ids=True)
+        batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
+        batch_labels  = self.proc.fetch_data ( '%s_labels' % self.ioname  )
+        batch_track  = self.proc.fetch_data ( '%s_track' % self.ioname  )
+        batch_shower = self.proc.fetch_data ( '%s_shower' % self.ioname )
+
+        gt_pixels = []
+        output_image, output_labels = [], []
+        img_shape = (1,) + (self.N,) * self.dim + (1,)
+        labels_shape = (1,) + (self.N,) * self.dim
+        for index in np.arange(self.batch_size):
+            image    = batch_image.data()  [index]
+            labels   = batch_labels.data() [index]
+            t_points = batch_track.data()  [index]
+            s_points = batch_shower.data() [index]
+
+            voxels = self.extract_voxels(image)
+
+
+            image = image.reshape(img_shape)
+            labels = labels.reshape(labels_shape)
+
+            # TODO set N from this
+            #image_dim = batch_image.dim()
+            #image = image.reshape(image_dim[1:3])
+            gt_pixels_current = self.extract_gt_pixels(t_points, s_points)
+            gt_pixels.extend(gt_pixels_current)
+            if len(gt_pixels_current) > 0:
+                output_image.append(image)
+                output_labels.append(labels)
+
+        if len(output_image) == 0: # No gt pixels in this batch - try next batch
+            print("DUMP")
+            return self.forward()
+
+        # TODO For now we only consider batch size 1
+        output_image = np.reshape(np.array(output_image), img_shape)
+        output_labels = np.reshape(np.array(output_labels), labels_shape)
+
+        blob = {}
+        blob['data'] = output_image.astype(np.float32)
+        blob['labels'] = output_labels.astype(np.int32)
+        blob['im_info'] = list(img_shape)
+        blob['gt_pixels'] = np.array(gt_pixels)
+        blob['voxels'] = np.array(voxels)
+        return blob
+
     def forward(self):
+        # Now using a file with combined uresnet and ppn information
+        print(self.train_uresnet, self.cfg.NET)
         if self.train_uresnet:
             return self.forward_uresnet()
+        elif self.cfg.NET == 'full':
+            return self.forward_ppn_uresnet()
         else:
             return self.forward_ppn()
 

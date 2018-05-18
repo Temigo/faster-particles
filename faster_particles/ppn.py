@@ -126,9 +126,9 @@ class PPN(object):
                             weights_regularizer=weights_regularizer,
                             biases_regularizer=biases_regularizer,
                             biases_initializer=tf.constant_initializer(0.0)):
+            # Returns F3 and F5 feature maps
+            net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=(self.is_training and not self.cfg.FREEZE), reuse=self.reuse)
             with tf.variable_scope(scope, reuse=self.reuse):
-                # Returns F3 and F5 feature maps
-                net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=(self.is_training and not self.cfg.FREEZE), reuse=self.reuse)
                 self.set_dimensions(net.shape, net2.shape)
                 self.set3d()
 

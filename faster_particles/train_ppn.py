@@ -12,9 +12,10 @@ from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator
 #from faster_particles import LarcvGenerator
 from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
-from faster_particles.demo_ppn import display, get_filelist
+from faster_particles.demo_ppn import get_filelist, load_weights
+from faster_particles.display_utils import display, display_uresnet
 from faster_particles.base_net import basenets
-#from config import cfg
+
 
 class Trainer(object):
     def __init__(self, net, train_toydata, test_toydata, cfg, display_util=None):
@@ -31,19 +32,8 @@ class Trainer(object):
         if not os.path.isdir(self.outputdir):
             os.makedirs(self.outputdir)
 
-        self.MAX_STEPS = cfg.MAX_STEPS
-        self.weights_file = cfg.WEIGHTS_FILE
         self.display = display_util
         self.cfg = cfg
-
-    def load_weights(self, sess):
-        # Restore variables for base net if given checkpoint file
-        if self.weights_file is not None:
-            print("Restoring checkpoint file...")
-            variables_to_restore = [v for v in tf.global_variables() if self.cfg.BASE_NET in v.name]
-            saver_base_net = tf.train.Saver(variables_to_restore)
-            saver_base_net.restore(sess, self.weights_file)
-            print("Done.")
 
     def train(self, net_args, scope="ppn"):
         print("Creating net architecture...")
@@ -58,16 +48,22 @@ class Trainer(object):
         #with tf.Session() as sess:
         sess = tf.InteractiveSession()
 
-        self.load_weights(sess)
+        load_weights(self.cfg, sess)
         summary_writer_train = tf.summary.FileWriter(os.path.join(self.logdir, 'train'), sess.graph)
         summary_writer_test = tf.summary.FileWriter(os.path.join(self.logdir, 'test'), sess.graph)
         sess.run(tf.global_variables_initializer())
 
         # Global saver
-        saver = tf.train.Saver()
+        saver = None
+        if self.cfg.FREEZE: # Save only PPN weights (excluding base network)
+            variables_to_restore = [v for v in tf.global_variables() if "ppn" in v.name]
+            saver = tf.train.Saver(variables_to_restore)
+        else: # Save everything (including base network)
+            saver = tf.train.Saver()
 
         step = 0
-        while step < self.MAX_STEPS+1:
+        print("Start training...")
+        while step < self.cfg.MAX_STEPS+1:
             step += 1
             is_testing = step%10 == 5
             is_drawing = step%1000 == 0
@@ -76,8 +72,8 @@ class Trainer(object):
             else:
                 blob = self.train_toydata.forward()
 
-            if step%1000 == 0:
-                print("Step %d" % step)
+            #if step%1000 == 0:
+            print("Step %d" % step)
 
             if is_testing:
                 summary, result = self.test_net.test_image(sess, blob)
@@ -93,6 +89,7 @@ class Trainer(object):
 
         summary_writer_train.close()
         summary_writer_test.close()
+        print("Done.")
 
 def train_ppn(cfg):
     # Define data generators
@@ -121,7 +118,10 @@ def train_classification(cfg):
 
     net_args = {}
 
-    t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg)
+    display_util = None
+    if cfg.BASE_NET == 'uresnet':
+        display_util = display_uresnet
+    t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg, display_util=display_util)
     t.train(net_args, scope=cfg.BASE_NET)
 
 if __name__ == '__main__':
