@@ -119,7 +119,7 @@ class UResNet(BaseNet):
 
         keys = np.sort(self.conv_feature_map.keys())
         key2 = keys[-1]
-        key = keys[int(len(keys)/2.0)] # FIXME -1
+        key = keys[int(len(keys)/2.0)-1]
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
     def create_architecture(self, is_training=True, reuse=False, scope="uresnet"):

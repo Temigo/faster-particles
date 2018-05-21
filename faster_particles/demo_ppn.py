@@ -35,9 +35,10 @@ def load_weights(cfg, sess):
     for scope, weights_file in scopes:
         print('Restoring %s...' % weights_file)
         variables_to_restore = [v for v in tf.global_variables() if scope(v.name)]
+        print("- ignoring %d/%d variables" % (len(tf.global_variables()) - len(variables_to_restore), len(tf.global_variables())))
         if len(variables_to_restore) > 0:
-            saver_base_net = tf.train.Saver(variables_to_restore)
-            saver_base_net.restore(sess, weights_file)
+            saver = tf.train.Saver(variables_to_restore)
+            saver.restore(sess, weights_file)
         else:
             print("WARNING No variable was restored from weights file %s." % weights_file)
     print("Done.")
@@ -112,6 +113,18 @@ def inference_full(cfg):
     print("Done.")
     # Clustering: k-means? DBSCAN?
 
+def clustering(inference_base, inference_ppn, blobs):
+    # Rough clustering
+    num_test = len(inference_base)
+    eps=20
+    for i in range(num_test):
+        db = DBSCAN(eps=eps, min_samples=10).fit_predict(blobs[i]['voxels'])
+        print(db)
+
+    # Eliminate clusters unrelated to PPN points
+
+    # Fine clustering
+
 def inference(cfg):
     data = get_data(cfg)
     is_ppn = cfg.NET == 'ppn'
@@ -127,10 +140,14 @@ def inference(cfg):
     net.init_placeholders()
     net.create_architecture(is_training=False)
 
+    #print("Default graph = ", net._predictions['rois'].graph == tf.get_default_graph())
+
     if is_ppn:
         metrics = PPNMetrics(cfg, dim1=net.dim1, dim2=net.dim2)
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         load_weights(cfg, sess)
+
         for i in range(10):
             blob = data.forward()
             summary, results = net.test_image(sess, blob)

@@ -50,6 +50,9 @@ class PPN(object):
             self._predictions['ppn2_scores'],
             self.summary_op
             ], feed_dict=feed_dict)
+        print("TEST")
+        print("rois: ", rois*self.dim1*self.dim2)
+        print("gt_pixels: ", blob['gt_pixels'])
         return summary, {'im_proposals': im_proposals,
                         'im_labels': im_labels,
                         'im_scores': im_scores,
@@ -70,7 +73,8 @@ class PPN(object):
                             self._predictions['im_proposals'],
                             self.summary_op
                             ], feed_dict=feed_dict)
-
+        print("rois: ", rois*self.dim1*self.dim2)
+        print("gt_pixels: ", blobs['gt_pixels'])
         return summary, {'rois': rois,
                         'im_labels': im_labels,
                         'im_proposals': im_proposals,

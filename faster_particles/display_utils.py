@@ -187,9 +187,11 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display'):
 
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display', directory=''):
-    print(im_proposals)
-    print(im_scores)
-    print(im_labels)
+    print("gt_pixels: ", blob['gt_pixels'])
+    print("rois : ", rois*dim1*dim2)
+    print("im_proposals: ", im_proposals)
+    print("im_scores: ", im_scores)
+    #print(im_labels)
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:

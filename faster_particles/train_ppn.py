@@ -47,11 +47,11 @@ class Trainer(object):
 
         #with tf.Session() as sess:
         sess = tf.InteractiveSession()
-
+        sess.run(tf.global_variables_initializer())
         load_weights(self.cfg, sess)
         summary_writer_train = tf.summary.FileWriter(os.path.join(self.logdir, 'train'), sess.graph)
         summary_writer_test = tf.summary.FileWriter(os.path.join(self.logdir, 'test'), sess.graph)
-        sess.run(tf.global_variables_initializer())
+
 
         # Global saver
         saver = None
@@ -66,7 +66,7 @@ class Trainer(object):
         while step < self.cfg.MAX_STEPS+1:
             step += 1
             is_testing = step%10 == 5
-            is_drawing = step%1000 == 0
+            is_drawing = step%100 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:
@@ -82,6 +82,9 @@ class Trainer(object):
                 summary, result = self.train_net.train_step_with_summary(sess, blob)
                 summary_writer_train.add_summary(summary, step)
             if is_drawing and self.display is not None:
+                if self.cfg.NET == 'ppn':
+                    result['dim1'] = self.train_net.dim1
+                    result['dim2'] = self.train_net.dim2
                 self.display(blob, self.cfg, index=step, name='display_train', **result)
 
             if step%1000 == 0:

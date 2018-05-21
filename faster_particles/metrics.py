@@ -95,7 +95,7 @@ class PPNMetrics(object):
             left_of_first_bin = data.min() - float(d)/2
             right_of_last_bin = data.max() + float(d)/2
             bins = np.arange(left_of_first_bin, right_of_last_bin + d, d)
-            print(data, d, left_of_first_bin, right_of_last_bin, bins)
+
         plt.hist(data, bins)
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
@@ -152,7 +152,6 @@ class PPNMetrics(object):
 
     def plot_ambiguity(self):
         bins = np.linspace(0, 100, 100)
-        print(self.ppn1_ambiguity, self.ppn2_ambiguity)
         self.make_plot(
             self.ppn1_ambiguity,
             xlabel="#ground truth pixels within radius %d" % self.threshold_ambiguity,
@@ -170,7 +169,6 @@ class PPNMetrics(object):
 
     def plot_false_positives(self):
         bins = np.arange(0, 1.1, 0.1)
-        print(bins)
         self.make_plot(
             self.ppn1_false_positives,
             bins=bins,
