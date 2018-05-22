@@ -99,6 +99,7 @@ def display_im_proposals(cfg, ax, im_proposals, im_scores, im_labels):
                     plt.plot([x], [y], 'go')
                 else:
                     raise Exception("Label unknown")
+    return im_proposals
 
 def display_rois(cfg, ax, rois, dim1, dim2):
     if rois is not None:
@@ -141,7 +142,13 @@ def display_gt_pixels(cfg, ax, gt_pixels):
             elif gt_pixel[2] == 2:
                 plt.plot([x], [y], 'go')
 
-def display_uresnet(blob, cfg, index=0, predictions=None, name='display'):
+def display_uresnet(blob, cfg, index=0, predictions=None, name='display', directory=''):
+    if directory == '':
+        directory = cfg.DISPLAY_DIR
+    else:
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
     kwargs = {}
     if cfg.DATA_3D:
         kwargs['projection'] = '3d'
@@ -181,16 +188,16 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display'):
         display_original_image(blob_pred, cfg, ax3, vmax=3.1)
         set_image_limits(cfg, ax3)
         # Use dpi=1000 for high resolution
-        plt.savefig(os.path.join(cfg.DISPLAY_DIR, name + '_predictions_%d.png' % index))
+        plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index))
         plt.close(fig3)
 
 
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display', directory=''):
     print("gt_pixels: ", blob['gt_pixels'])
-    print("rois : ", rois*dim1*dim2)
-    print("im_proposals: ", im_proposals)
-    print("im_scores: ", im_scores)
+    #print("rois : ", rois*dim1*dim2)
+    #print("im_proposals: ", im_proposals)
+    #print("im_scores: ", im_scores)
     #print(im_labels)
     if directory == '':
         directory = cfg.DISPLAY_DIR
@@ -217,7 +224,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
     display_original_image(blob, cfg, ax2, vmin=0, vmax=400, cmap='jet')
-    display_im_proposals(cfg, ax2, im_proposals, im_scores, im_labels)
+    im_proposals = display_im_proposals(cfg, ax2, im_proposals, im_scores, im_labels)
     set_image_limits(cfg, ax2)
     # Use dpi=1000 for high resolution
     plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index))
@@ -235,7 +242,7 @@ def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
     kwargs = {}
     if cfg.DATA_3D:
         kwargs['projection'] = '3d'
-        blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0,...,0])
+        #blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0,...,0])
 
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
@@ -250,7 +257,10 @@ def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
     blob_label = {}
     if cfg.DATA_3D:
         blob_label['data'] = blob['labels'][0,...]
+        #blob_label['voxels'] = blob['voxels']
+        #blob_label['voxels_value'] = blob_label['data'][blob['voxels'].T]
         blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
+        blob_label['voxels'][:, [0, 1, 2]] = blob_label['voxels'][:, [2, 1, 0]]
     else:
         blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
     display_original_image(blob_label, cfg, ax2, vmax=3.1, cmap='tab10')
@@ -266,6 +276,7 @@ def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
     if cfg.DATA_3D:
         blob_pred['data'] = predictions[0,...]
         blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0,...])
+        blob_pred['voxels'][:, [0, 1, 2]] = blob_pred['voxels'][:, [2, 1, 0]]
     else:
         blob_pred['data'] = predictions[:, :, :, np.newaxis]
     display_original_image(blob_pred, cfg, ax3, vmax=3.1)

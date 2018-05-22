@@ -13,7 +13,7 @@ from faster_particles import ToydataGenerator
 #from faster_particles import LarcvGenerator
 from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
 from faster_particles.demo_ppn import get_filelist, load_weights
-from faster_particles.display_utils import display, display_uresnet
+from faster_particles.display_utils import display, display_uresnet, display_ppn_uresnet
 from faster_particles.base_net import basenets
 
 
@@ -54,19 +54,19 @@ class Trainer(object):
 
 
         # Global saver
-        saver = None
-        if self.cfg.FREEZE: # Save only PPN weights (excluding base network)
-            variables_to_restore = [v for v in tf.global_variables() if "ppn" in v.name]
-            saver = tf.train.Saver(variables_to_restore)
-        else: # Save everything (including base network)
-            saver = tf.train.Saver()
+        #saver = None
+        #if self.cfg.FREEZE: # Save only PPN weights (excluding base network)
+        #    variables_to_restore = [v for v in tf.global_variables() if "ppn" in v.name]
+        #    saver = tf.train.Saver(variables_to_restore)
+        #else: # Save everything (including base network)
+        saver = tf.train.Saver()
 
         step = 0
         print("Start training...")
         while step < self.cfg.MAX_STEPS+1:
             step += 1
             is_testing = step%10 == 5
-            is_drawing = step%100 == 0
+            is_drawing = True #step%100 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:
@@ -85,7 +85,7 @@ class Trainer(object):
                 if self.cfg.NET == 'ppn':
                     result['dim1'] = self.train_net.dim1
                     result['dim2'] = self.train_net.dim2
-                self.display(blob, self.cfg, index=step, name='display_train', **result)
+                self.display(blob, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), **result)
 
             if step%1000 == 0:
                 save_path = saver.save(sess, os.path.join(self.outputdir, "model-%d.ckpt" % step))
@@ -106,7 +106,11 @@ def train_ppn(cfg):
 
     net_args = {"base_net": basenets[cfg.BASE_NET], "base_net_args": {}}
 
-    t = Trainer(PPN, train_data, test_data, cfg, display_util=display)
+    if cfg.NET == 'ppn':
+        display_util = display
+    else:
+        display_util = display_ppn_uresnet
+    t = Trainer(PPN, train_data, test_data, cfg, display_util=display_util)
     t.train(net_args)
 
 def train_classification(cfg):

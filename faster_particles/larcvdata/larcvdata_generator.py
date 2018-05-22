@@ -220,8 +220,7 @@ class LarcvGenerator(object):
             s_points = batch_shower.data() [index]
 
             voxels = self.extract_voxels(image)
-
-
+            
             image = image.reshape(img_shape)
             labels = labels.reshape(labels_shape)
 

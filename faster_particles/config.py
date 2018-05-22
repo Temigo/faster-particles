@@ -81,7 +81,6 @@ class PPNConfig(object):
         self.train_parser.add_argument("-o", "--output-dir", action='store', type=str, required=True, help="Path to output directory.")
         self.train_parser.add_argument("-l", "--log-dir", action='store', type=str, required=True, help="Path to log directory.")
         self.train_parser.add_argument("-c", "--num-classes", default=self.NUM_CLASSES, type=int, help="Number of classes (including background).")
-        self.train_parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
         self.train_parser.add_argument("-r", "--r", default=self.R, type=int, help="Max number of ROIs from PPN1")
         self.train_parser.add_argument("-st", "--ppn1-score-threshold", default=self.PPN1_SCORE_THRESHOLD, type=float, help="Threshold on signal score to define positives in PPN1")
         self.train_parser.add_argument("-dt", "--ppn2-distance-threshold", default=self.PPN2_DISTANCE_THRESHOLD, type=float, help="Threshold on distance to closest ground truth pixel to define positives in PPN2")
@@ -104,6 +103,7 @@ class PPNConfig(object):
         self.train_parser.set_defaults(func=train_ppn)
 
     def common_arguments(self, parser):
+        parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
         parser.add_argument("-wb", "--weights-file-base", help="Tensorflow .ckpt file to load weights of trained base network.")
         parser.add_argument("-wp", "--weights-file-ppn", help="Tensorflow .ckpt file to load weights of trained PPN.") # does not load base net weights
         parser.add_argument("-gpu", "--gpu", default=self.CUDA_VISIBLE_DEVICES, type=str, help="CUDA visible devices list (in a string and separated by commas).")

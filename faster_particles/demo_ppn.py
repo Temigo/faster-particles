@@ -20,17 +20,16 @@ CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 def load_weights(cfg, sess):
     print("Restoring checkpoint file...")
     scopes = []
+    if cfg.WEIGHTS_FILE_PPN is not None:
+        scopes.append((lambda x: True, cfg.WEIGHTS_FILE_PPN))
     # Restore variables for base net if given checkpoint file
-    if cfg.WEIGHTS_FILE_BASE is not None:
+    else:
         if cfg.NET == 'ppn': # load only relevant layers of base network
 		    scopes.append((lambda x: cfg.BASE_NET in x and "optimizer" not in x, cfg.WEIGHTS_FILE_BASE))
+            #scopes.append((lambda x: cfg.BASE_NET in x, cfg.WEIGHTS_FILE_BASE))
         else: # load for full base network
             scopes.append((lambda x: cfg.BASE_NET in x, cfg.WEIGHTS_FILE_BASE))
-    if cfg.WEIGHTS_FILE_PPN is not None:
-        if cfg.WEIGHTS_FILE_BASE is None:
-            scopes.append((lambda x: True, cfg.WEIGHTS_FILE_PPN))
-        else: # Load PPN only weights
-            scopes.append((lambda x: "ppn" in x, cfg.WEIGHTS_FILE_PPN))
+
 
     for scope, weights_file in scopes:
         print('Restoring %s...' % weights_file)
@@ -63,6 +62,7 @@ def inference_simple(cfg, blobs, net, num_test=10):
     net.create_architecture(is_training=False)
     inference = []
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         load_weights(cfg, sess)
         for i in range(num_test):
             summary, results = net.test_image(sess, blobs[i])
@@ -70,11 +70,12 @@ def inference_simple(cfg, blobs, net, num_test=10):
     return inference
 
 def inference_full(cfg):
-    if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
-        raise Exception("Need both weights files for full inference.")
+    #if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
+    #    raise Exception("Need both weights files for full inference.")
 
-    num_test = 10
+    num_test = cfg.MAX_STEPS
     inference_base, inference_ppn, blobs = [], [], []
+    weights_file_ppn = cfg.WEIGHTS_FILE_PPN
     print("Retrieving data...")
     data = get_data(cfg)
     for i in range(num_test):
@@ -83,12 +84,14 @@ def inference_full(cfg):
 
     # First base
     print("Base network...")
+    cfg.WEIGHTS_FILE_PPN = None
     net_base = basenets[cfg.BASE_NET](cfg=cfg)
     inference_base = inference_simple(cfg, blobs, net_base, num_test=num_test)
     print("Done.")
     print(inference_base)
     tf.reset_default_graph()
     print("PPN network...")
+    cfg.WEIGHTS_FILE_PPN = weights_file_ppn
     net_ppn = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
     inference_ppn = inference_simple(cfg, blobs, net_ppn, num_test=num_test)
     print("Done.")
@@ -131,7 +134,8 @@ def inference(cfg):
     if is_ppn:
         net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
         if cfg.WEIGHTS_FILE_PPN is None:
-            raise Exception("Need a checkpoint file for PPN at least")
+            pass
+            #raise Exception("Need a checkpoint file for PPN at least")
     elif cfg.NET == 'base':
         net = basenets[cfg.BASE_NET](cfg=cfg)
         if cfg.WEIGHTS_FILE_PPN is None and cfg.WEIGHTS_FILE_BASE is None:
@@ -148,7 +152,7 @@ def inference(cfg):
         sess.run(tf.global_variables_initializer())
         load_weights(cfg, sess)
 
-        for i in range(10):
+        for i in range(cfg.MAX_STEPS):
             blob = data.forward()
             summary, results = net.test_image(sess, blob)
             if is_ppn:

@@ -42,17 +42,19 @@ class PPN(object):
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
-        im_proposals, im_labels, im_scores, rois, scores2, summary = sess.run([
+        im_proposals, im_labels, im_scores, rois, scores2, loss, x, summary = sess.run([
             self._predictions['im_proposals'],
             self._predictions['im_labels'],
             self._predictions['im_scores'],
             self._predictions['rois'],
             self._predictions['ppn2_scores'],
+            self._losses['total_loss'],
+            self.x,
             self.summary_op
             ], feed_dict=feed_dict)
-        print("TEST")
-        print("rois: ", rois*self.dim1*self.dim2)
-        print("gt_pixels: ", blob['gt_pixels'])
+        #print("loss: ", loss)
+        #print("x: ", x.shape, x)
+        #print("rois: ", rois)
         return summary, {'im_proposals': im_proposals,
                         'im_labels': im_labels,
                         'im_scores': im_scores,
@@ -61,7 +63,7 @@ class PPN(object):
     def train_step_with_summary(self, sess, blobs):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
         _, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives, \
-        im_labels, im_scores, im_proposals, summary = sess.run([
+        im_labels, im_scores, im_proposals, loss, x, summary = sess.run([
                             self.train_op,
                             self._predictions['ppn1_proposals'],
                             self._predictions['labels_ppn1'],
@@ -71,10 +73,13 @@ class PPN(object):
                             self._predictions['im_labels'],
                             self._predictions['im_scores'],
                             self._predictions['im_proposals'],
+                            self._losses['total_loss'],
+                            self.x,
                             self.summary_op
                             ], feed_dict=feed_dict)
-        print("rois: ", rois*self.dim1*self.dim2)
-        print("gt_pixels: ", blobs['gt_pixels'])
+        #print("loss: ", loss)
+        #print("x: ", x.shape, x)
+        #print("rois: ", rois)
         return summary, {'rois': rois,
                         'im_labels': im_labels,
                         'im_proposals': im_proposals,
@@ -111,7 +116,7 @@ class PPN(object):
     def set3d(self):
         self.conv = slim.conv2d
         self.dim = 2
-        self.ppn1_channels, self.ppn2_channels = 512, 512
+        self.ppn1_channels, self.ppn2_channels = 128, 32
         if self.cfg.DATA_3D:
             self.conv = slim.conv3d
             self.dim = 3
@@ -133,6 +138,7 @@ class PPN(object):
             # Returns F3 and F5 feature maps
             net, net2 = self.base_net.build_base_net(self.image_placeholder, is_training=(self.is_training and not self.cfg.FREEZE), reuse=self.reuse)
             with tf.variable_scope(scope, reuse=self.reuse):
+
                 self.set_dimensions(net.shape, net2.shape)
                 self.set3d()
 
@@ -202,6 +208,12 @@ class PPN(object):
                     self._predictions['im_proposals'] = im_proposals
                     self._predictions['im_labels'] = im_labels
                     self._predictions['im_scores'] = im_scores
+
+            with tf.variable_scope("", reuse=True):
+                self.x = tf.get_variable("uresnet/resnet_module2/module2/resnet_conv2/weights", dtype=tf.float32)
+                #self.x = tf.get_variable("ppn/ppn1/ppn1_conv/3x3/weights", dtype=tf.float32)
+                #self.x = tf.get_variable("ppn/ppn1/ppn1_conv/3x3/BatchNorm/beta", dtype=tf.float32)
+                #self.x = tf.get_variable("ppn/ppn2/ppn2_pixel_pred/weights", dtype=tf.float32)
 
     def build_ppn1(self, net2):
         # =====================================================
