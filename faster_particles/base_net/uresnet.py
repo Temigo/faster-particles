@@ -14,7 +14,7 @@ class UResNet(BaseNet):
 
         self.conv_feature_map = {}
         self.base_num_outputs = 16
-        self._num_strides = 3
+        self._num_strides = 3#4
 
     def init_placeholders(self):
         if self.is_3d:
@@ -119,7 +119,9 @@ class UResNet(BaseNet):
 
         keys = np.sort(self.conv_feature_map.keys())
         key2 = keys[-1]
-        key = keys[int(len(keys)/2.0)-1]
+        key = keys[int(len(keys)/2.0)-1] # -1
+        print(self.conv_feature_map[key], self.conv_feature_map[key2])
+        print(self.conv_feature_map)
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
     def create_architecture(self, is_training=True, reuse=False, scope="uresnet"):

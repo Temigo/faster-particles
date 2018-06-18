@@ -66,7 +66,7 @@ class Trainer(object):
         while step < self.cfg.MAX_STEPS+1:
             step += 1
             is_testing = step%10 == 5
-            is_drawing = True #step%100 == 0
+            is_drawing = step%100 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:

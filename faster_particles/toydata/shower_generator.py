@@ -1,10 +1,9 @@
 import numpy as np
 from skimage.draw import line_aa
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-#%matplotlib inline
 
 def make_shower(cfg):
 

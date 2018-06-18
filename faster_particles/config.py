@@ -1,8 +1,13 @@
 import argparse
 import os
+import numpy as np
+import tensorflow as tf
+
 
 from demo_ppn import inference, inference_full
 from train_ppn import train_ppn, train_classification
+
+
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # Control Tensorflow verbose level with TF_CPP_MIN_LOG_LEVEL
@@ -36,6 +41,7 @@ class PPNConfig(object):
     # Data configuration
     BATCH_SIZE = 1
     SEED = 123
+    NEXT_INDEX = 0
     TOYDATA = False
     # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
     # DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root" # For 2D
@@ -130,6 +136,7 @@ class PPNConfig(object):
         parser.add_argument("-png", "--shower-out-png", default=self.SHOWER_OUT_PNG, action='store_true')
         parser.add_argument("-ms", "--min-score", default=self.MIN_SCORE, type=float, help="Minimum score above which PPN predictions should be kept")
         parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
+	parser.add_argument("-ni", "--next-index", default=self.NEXT_INDEX, type=int, help="Index from which to start reading LArCV data file.")
 
     def parse_args(self):
         args = self.parser.parse_args()
@@ -142,6 +149,11 @@ class PPNConfig(object):
             args.func = train_classification
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights without loading any checkpoint file.")
+
+        # Set random seed for reproducibility
+        np.random.seed(self.SEED)
+        tf.set_random_seed(self.SEED)
+
         args.func(self)
 
     def update(self, args):

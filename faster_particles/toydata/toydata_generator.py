@@ -8,7 +8,7 @@ from __future__ import print_function
 import numpy as np
 from scipy.misc import imresize
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 from faster_particles.toydata.track_generator import generate_toy_tracks

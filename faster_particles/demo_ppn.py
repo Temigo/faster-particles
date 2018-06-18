@@ -23,7 +23,7 @@ def load_weights(cfg, sess):
     if cfg.WEIGHTS_FILE_PPN is not None:
         scopes.append((lambda x: True, cfg.WEIGHTS_FILE_PPN))
     # Restore variables for base net if given checkpoint file
-    else:
+    elif cfg.WEIGHTS_FILE_BASE is not None:
         if cfg.NET == 'ppn': # load only relevant layers of base network
 		    scopes.append((lambda x: cfg.BASE_NET in x and "optimizer" not in x, cfg.WEIGHTS_FILE_BASE))
             #scopes.append((lambda x: cfg.BASE_NET in x, cfg.WEIGHTS_FILE_BASE))
@@ -153,6 +153,7 @@ def inference(cfg):
         load_weights(cfg, sess)
 
         for i in range(cfg.MAX_STEPS):
+            print("%d/%d" % (i, cfg.MAX_STEPS))
             blob = data.forward()
             summary, results = net.test_image(sess, blob)
             if is_ppn:

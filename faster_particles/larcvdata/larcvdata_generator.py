@@ -52,7 +52,7 @@ class LarcvGenerator(object):
             else:
                 replace = 6
                 config_file = 'ppn_2d.cfg'
-        io_config = open(os.path.join(os.path.dirname(__file__), config_file)).read() % ((ioname, filelist) + (ioname,)*replace)
+        io_config = open(os.path.join(os.path.dirname(__file__), config_file)).read() % ((ioname, cfg.SEED, filelist) + (ioname,)*replace)
         # FIXME raises KeyError
         #io_config = io_config.format(ioname)
         self.ioname = ioname
@@ -70,7 +70,10 @@ class LarcvGenerator(object):
         self.proc = larcv_threadio()
         self.proc.configure(dataloader_cfg)
         #self.proc.set_next_index(10345)
+        self.proc.set_next_index(cfg.NEXT_INDEX)
         self.proc.start_manager(self.batch_size)
+        self.proc.next()
+
 
         # Retrieve voxel sparse for track/shower only
         from ROOT import TChain
@@ -104,7 +107,7 @@ class LarcvGenerator(object):
         return blob
 
     def extract_voxels(self, image):
-        voxels = []
+        voxels, voxels_value = [], []
         indices = np.nonzero(image)[0]
         for i in indices:
             x = i%self.N
@@ -113,6 +116,7 @@ class LarcvGenerator(object):
             i = (i-y)/self.N
             z = i%self.N
             voxels.append([x,y,z])
+            #voxels_value.append(image[i])
         return voxels
 
     def extract_gt_pixels(self, t_points, s_points):
@@ -220,7 +224,7 @@ class LarcvGenerator(object):
             s_points = batch_shower.data() [index]
 
             voxels = self.extract_voxels(image)
-            
+
             image = image.reshape(img_shape)
             labels = labels.reshape(labels_shape)
 

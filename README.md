@@ -19,12 +19,12 @@ make
 You will also need Tensorflow.
 
 ### Install
-The easiest way is to use Pip:
+The easiest way is to use Pip, although you will not get the latest changes:
 ```bash
 pip install faster-particles
 ```
 
-Alternatively, you can also clone the source:
+Alternatively, you can also clone the source if you want the latest updates or develop it:
 ```bash
 git clone https://github.com/Temigo/faster-particles.git
 cd faster-particles
