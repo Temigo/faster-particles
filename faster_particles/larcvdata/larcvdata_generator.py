@@ -80,7 +80,7 @@ class LarcvGenerator(object):
         self.ch = TChain("sparse3d_data_tree")
         self.ch.AddFile(cfg.DATA)
 
-    def __delete__(self):
+    def __del__(self):
         self.proc.stop_manager()
         self.proc.reset()
 
@@ -149,20 +149,22 @@ class LarcvGenerator(object):
 
     def forward_ppn(self):
         self.proc.next(store_entries=True, store_event_ids=True)
+        entries = self.proc.fetch_entries()
         batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
         batch_track  = self.proc.fetch_data ( '%s_track' % self.ioname  )
         batch_shower = self.proc.fetch_data ( '%s_shower' % self.ioname )
         #batch_entries = self.proc.fetch_entries()
         #batch_event_ids = self.proc.fetch_event_ids()
 
-        gt_pixels = []
-        output = []
+        gt_pixels, output, final_entries = [], [], []
         img_shape = (1,) + (self.N,) * self.dim + (1,)
         for index in np.arange(self.batch_size):
             image    = batch_image.data()  [index]
             t_points = batch_track.data()  [index]
             s_points = batch_shower.data() [index]
+            entry_id = entries.data()      [index]
 
+            final_entries.append(entry_id)
             voxels = self.extract_voxels(image)
 
             """
@@ -204,10 +206,12 @@ class LarcvGenerator(object):
         blob['im_info'] = list(img_shape)
         blob['gt_pixels'] = np.array(gt_pixels)
         blob['voxels'] = np.array(voxels)
+        blob['entries'] = final_entries
         return blob
 
     def forward_ppn_uresnet(self):
         self.proc.next(store_entries=True, store_event_ids=True)
+        entries = self.proc.fetch_entries()
         batch_image  = self.proc.fetch_data ( '%s_data' % self.ioname   )
         batch_labels  = self.proc.fetch_data ( '%s_labels' % self.ioname  )
         batch_track  = self.proc.fetch_data ( '%s_track' % self.ioname  )
@@ -251,6 +255,7 @@ class LarcvGenerator(object):
         blob['im_info'] = list(img_shape)
         blob['gt_pixels'] = np.array(gt_pixels)
         blob['voxels'] = np.array(voxels)
+        blob['entries'] = entries
         return blob
 
     def forward(self):

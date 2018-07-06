@@ -1,6 +1,6 @@
 # Define Matplotlib backend
 import matplotlib
-#matplotlib.use('Agg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from toydata.toydata_generator import ToydataGenerator

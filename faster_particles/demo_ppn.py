@@ -144,8 +144,6 @@ def inference(cfg):
     net.init_placeholders()
     net.create_architecture(is_training=False)
 
-    #print("Default graph = ", net._predictions['rois'].graph == tf.get_default_graph())
-
     if is_ppn:
         metrics = PPNMetrics(cfg, dim1=net.dim1, dim2=net.dim2)
     with tf.Session() as sess:
