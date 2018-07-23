@@ -35,7 +35,7 @@ def refine_point(cfg, blob, coords, index=0):
 
 
         zone = blob['data'][0,x0:x1, y0:y1,0]
-        print(np.amax(zone[zone > 0.0]), np.amin(zone[zone > 0.0]))
+        #print(np.amax(zone[zone > 0.0]), np.amin(zone[zone > 0.0]))
         zone = normalize_patch(zone)
 
         fig2 = plt.figure()
@@ -70,39 +70,49 @@ def refine_point(cfg, blob, coords, index=0):
 def generate_cluster_data(cfg):
     filelist = get_filelist(cfg.DATA)
     data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
-    directory = 'clustering'
+    directory = 'clustering_test'
     index = 0
     for i in range(cfg.MAX_STEPS):
         print("%d/%d" % (i, cfg.MAX_STEPS))
         blob = data.forward()
         print(blob['entries'])
+        print(blob['gt_pixels'])
         for gt_pixel in blob['gt_pixels']:
             index += 1
             x, y, c = gt_pixel
-            refine_point(cfg, blob, (x, y), index=index)
+            #refine_point(cfg, blob, (x, y), index=index)
             x, y = int(np.floor(x)), int(np.floor(y))
+            #print(x, y, blob['data'][0, x, y, 0])
+
             if not (x - N/2 < 0 or x + N/2 > cfg.IMAGE_SIZE-1 or y-N/2 < 0 or y+N/2 > cfg.IMAGE_SIZE-1):
                 x0 = int(np.maximum(0, x - N/2))
                 x1 = int(np.minimum(cfg.IMAGE_SIZE-1, x + N/2))
                 y0 = int(np.maximum(0, y - N/2))
                 y1 = int(np.minimum(cfg.IMAGE_SIZE-1, y + N/2))
-                print(x, y, x0, x1, y0, y1)
+                #print(x, y, x0, x1, y0, y1)
 
                 fig = plt.figure()
                 ax = fig.add_subplot(111, aspect='equal')
-                ax.imshow(blob['data'][0,x0:x1, y0:y1,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+                ax.imshow(blob['data'][0,x0:x1, y0:y1,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=1)
                 plt.savefig(os.path.join(directory, '%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
                 plt.close(fig)
 
                 fig3 = plt.figure()
                 ax3 = fig3.add_subplot(111, aspect='equal')
-                ax3.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+                ax3.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=1)
+                display_gt_pixels(cfg, ax3, blob['gt_pixels'])
                 plt.savefig(os.path.join(directory, '%d_%d_original.png' % (index, blob['entries'][0])), bbox_inches='tight')
                 plt.close(fig3)
 
+                fig4 = plt.figure()
+                ax4 = fig4.add_subplot(111, aspect='equal')
+                ax4.imshow(blob['data'][0,...,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=1)
+                plt.savefig(os.path.join(directory, '%d_%d_original_no_gt.png' % (index, blob['entries'][0])), bbox_inches='tight')
+                plt.close(fig4)
+
                 fig2 = plt.figure()
                 ax2 = fig2.add_subplot(111, aspect='equal')
-                ax2.imshow(blob['data'][0,x0:x1, y0:y1,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=400)
+                ax2.imshow(blob['data'][0,x0:x1, y0:y1,0], cmap='jet', interpolation='none', origin='lower', vmin=0, vmax=1)
                 display_gt_pixels(cfg, ax2, [[x-x0, y-y0, c]])
                 plt.savefig(os.path.join(directory, '%d_%d_gt.png' %  (index, blob['entries'][0])), bbox_inches='tight')
                 plt.close(fig2)
@@ -138,9 +148,11 @@ def generate_cluster_data(cfg):
 
 if  __name__ == '__main__':
     class MyCfg(object):
-        DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
-        MAX_STEPS = 5
-        IMAGE_SIZE = 160
+        #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
+        #DATA = "/home/drinkingkazu/larcv.root"
+        DATA = "/home/drinkingkazu/cacca8.root"
+        MAX_STEPS = 100
+        IMAGE_SIZE = 512#384
         BATCH_SIZE = 1
         DATA_3D = False
         SEED = 123

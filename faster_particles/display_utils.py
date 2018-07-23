@@ -83,11 +83,13 @@ def extract_voxels(data):
 
 def display_im_proposals(cfg, ax, im_proposals, im_scores, im_labels):
     if im_proposals is not None and im_scores is not None:
-        if len(im_proposals) > 0:
+        print(im_proposals)
+        print(im_scores)
+        """if len(im_proposals) > 0:
             eps = 20.0 #9.0
             if cfg.DATA_3D:
                 eps = 15.0 # FIXME
-            im_proposals = filter_points(im_proposals, im_scores, eps)
+            im_proposals = filter_points(im_proposals, im_scores, eps)"""
 
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
@@ -221,23 +223,23 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # --- FIGURE 1 : PPN1 ROI ---
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax)
-    #display_gt_pixels(cfg, ax, blob['gt_pixels'])
+    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
+    display_gt_pixels(cfg, ax, blob['gt_pixels'])
     display_rois(cfg, ax, rois, dim1, dim2)
     set_image_limits(cfg, ax)
     # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_proposals_%d.png' % index), bbox_inches='tight')
+    plt.savefig(os.path.join(directory, name + '_proposals_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
     plt.close(fig)
 
     # --- FIGURE 2 : PPN2 predictions ---
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax2, vmin=0, vmax=400, cmap='jet')
+    display_original_image(blob, cfg, ax2, vmin=0, vmax=1, cmap='jet')
     im_proposals = display_im_proposals(cfg, ax2, im_proposals, im_scores, im_labels)
     set_image_limits(cfg, ax2)
     #plt.show()
     # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
+    plt.savefig(os.path.join(directory, name + '_predictions_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
     plt.close(fig2)
     return im_proposals
 

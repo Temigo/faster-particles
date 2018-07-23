@@ -6,7 +6,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import sys, os, subprocess
+import sys, os, subprocess, glob
 
 from faster_particles.display_utils import display, display_uresnet, display_ppn_uresnet
 from faster_particles.ppn import PPN
@@ -42,9 +42,12 @@ def load_weights(cfg, sess):
             print("WARNING No variable was restored from weights file %s." % weights_file)
     print("Done.")
 
+# Returns a list of files as a string *without spaces*
+# e.g. "["file1.root","file2.root"]"
 def get_filelist(ls_command):
-    filelist = subprocess.Popen(["ls %s" % ls_command], shell=True, stdout=subprocess.PIPE).stdout
-    return str(filelist.read().splitlines()).replace('\'', '\"').replace(" ", "")
+    #filelist = subprocess.Popen(["ls %s" % ls_command], shell=True, stdout=subprocess.PIPE).stdout
+    filelist = glob.glob(ls_command)
+    return str(filelist).replace('\'', '\"').replace(" ", "")
 
 def get_data(cfg):
     if cfg.TOYDATA:

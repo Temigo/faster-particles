@@ -196,7 +196,7 @@ class LarcvGenerator(object):
 
         if len(output) == 0: # No gt pixels in this batch - try next batch
             print("DUMP")
-            return self.forward()
+            return self.forward_ppn()
 
         # TODO For now we only consider batch size 1
         output = np.reshape(np.array(output), img_shape)
@@ -260,7 +260,6 @@ class LarcvGenerator(object):
 
     def forward(self):
         # Now using a file with combined uresnet and ppn information
-        print(self.train_uresnet, self.cfg.NET)
         if self.train_uresnet:
             return self.forward_uresnet()
         elif self.cfg.NET == 'full':

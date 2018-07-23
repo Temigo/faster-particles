@@ -13,7 +13,7 @@ import sys, os
 
 from faster_particles.ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
-    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer
+    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer, nms
 from faster_particles.base_net.vgg import VGG
 
 class PPN(object):
@@ -160,36 +160,6 @@ class PPN(object):
 
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
-                # FIXME How to combine losses
-                total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
-                            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
-                            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
-                self._losses['total_loss'] = total_loss
-                tf.summary.scalar('loss', total_loss)
-
-                if self.is_training:
-                    tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32), name="ppn1_positives"))
-                    tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32), name="ppn2_positives"))
-
-                    tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
-                    tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
-                    tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
-                    tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
-                    tf.summary.scalar('loss_ppn2_background', self._losses['loss_ppn2_background'])
-                    tf.summary.scalar('loss_ppn2_track', self._losses['loss_ppn2_track'])
-                    tf.summary.scalar('loss_ppn2_shower', self._losses['loss_ppn2_shower'])
-                    tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
-                    tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
-
-                    with tf.variable_scope("optimizer"):
-                        global_step = tf.Variable(0, trainable=False, name="global_step")
-                        lr = tf.train.exponential_decay(self.lr, global_step, 10000, 0.95)
-                        optimizer = tf.train.AdamOptimizer(learning_rate=lr)
-                        self.train_op = optimizer.minimize(total_loss, global_step=global_step)
-
-                self.summary_op = tf.summary.merge_all()
-
                 # Testing time
                 # Turn predicted positions (float) into original image positions
                 # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
@@ -200,14 +170,57 @@ class PPN(object):
                     im_labels = tf.argmax(scores2, axis=1, name="im_labels_raw")
                     im_scores = tf.gather_nd(scores2, tf.concat([tf.reshape(tf.range(0, tf.shape(im_labels)[0]), (-1, 1)), tf.cast(tf.reshape(im_labels, (-1, 1)), tf.int32)], axis=1), name="im_scores_raw")
                     # We have now num_roi proposals and corresponding labels in original image.
-                    # Pixel NMS equivalent ?
                     keep = tf.where(tf.greater(im_scores, self.cfg.MIN_SCORE), name="keep_good_scores")
                     im_proposals = tf.gather_nd(im_proposals, keep, name="im_proposals")
                     im_labels = tf.gather_nd(im_labels, keep, name="im_labels")
                     im_scores = tf.gather_nd(im_scores, keep, name="im_scores")
+                    # Pixel NMS equivalent ?
+                    im_proposals, im_scores = nms(im_proposals, im_scores)
                     self._predictions['im_proposals'] = im_proposals
                     self._predictions['im_labels'] = im_labels
                     self._predictions['im_scores'] = im_scores
+
+                if self.is_training:
+                    distances = tf.zeros((tf.shape(im_proposals)[0], tf.shape(self.gt_pixels_placeholder)[0]))
+                    for i in range(im_proposals.get_shape()[-1]):
+                        x1, x2 = tf.meshgrid(self.gt_pixels_placeholder[:, i], im_proposals[:, i])
+                        distances = distances + tf.pow(x1 - x2, 2)
+                    distances = tf.sqrt(distances, name="final_distances")
+                    closest_distance = tf.reduce_min(distances, axis=1, name="final_closest_distance")
+                    # Final loss for points: mean for all proposed points of distance to closest gt point
+                    self._losses['loss_final_point'] = tf.reduce_mean(tf.reduce_mean(closest_distance), name="loss_final_point")
+
+                # FIXME How to combine losses
+                total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
+                            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
+                            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
+                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
+                self._losses['total_loss'] = total_loss
+                tf.summary.scalar('loss', total_loss)
+
+                if self.is_training:
+                    im_proposals
+                    tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32), name="ppn1_positives"))
+                    tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32), name="ppn2_positives"))
+
+                    tf.summary.scalar('loss_ppn1_point', self._losses['loss_ppn1_point'])
+                    tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
+                    tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
+                    tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
+                    tf.summary.scalar('loss_ppn2_background', self._losses['loss_ppn2_background'])
+                    tf.summary.scalar('loss_ppn2_track', self._losses['loss_ppn2_track'])
+                    tf.summary.scalar('loss_ppn2_shower', self._losses['loss_ppn2_shower'])
+                    tf.summary.scalar('accuracy_class_ppn1', self._predictions['accuracy_ppn1'])
+                    tf.summary.scalar('accuracy_class_ppn2', self._predictions['accuracy_ppn2'])
+                    tf.summary.scalar('loss_final_point', self._losses['loss_final_point'])
+
+                    with tf.variable_scope("optimizer"):
+                        global_step = tf.Variable(0, trainable=False, name="global_step")
+                        lr = tf.train.exponential_decay(self.lr, global_step, 10000, 0.95)
+                        optimizer = tf.train.AdamOptimizer(learning_rate=lr)
+                        self.train_op = optimizer.minimize(total_loss, global_step=global_step)
+
+                self.summary_op = tf.summary.merge_all()
 
             with tf.variable_scope("", reuse=True):
                 self.x = tf.get_variable("uresnet/resnet_module2/module2/resnet_conv2/weights", dtype=tf.float32)

@@ -22,7 +22,7 @@ class PPNConfig(object):
     DISPLAY_DIR = "display"
     NUM_CLASSES = 3
     R = 20
-    PPN1_SCORE_THRESHOLD = 0.5
+    PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
     LEARNING_RATE = 0.001
     LAMBDA_PPN = 0.5
@@ -52,7 +52,8 @@ class PPNConfig(object):
     # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
     # DATA = ""
     #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
-    DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
+    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
+    DATA = "/stage/drinkingkazu/fuckgrid/p0[01234]/larcv.root"
     DATA_3D = False
 
     # Track configuration

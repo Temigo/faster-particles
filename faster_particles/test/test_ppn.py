@@ -10,7 +10,8 @@ import tensorflow as tf
 from faster_particles.ppn import PPN
 from faster_particles.ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
     compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels, \
-    include_gt_pixels, predicted_pixels, crop_pool_layer, all_combinations, slice_rois
+    include_gt_pixels, predicted_pixels, crop_pool_layer, all_combinations, slice_rois, \
+    nms_step, nms
 from faster_particles.toydata.toydata_generator import ToydataGenerator
 
 def generate_anchors_np(im_shape, repeat=1):
@@ -323,6 +324,26 @@ class Test(unittest.TestCase):
         dim2 = 4.0
         rois_np = np.random.rand(10, 3) * 64
         return self.slice_rois(rois_np, dim2)
+
+    def test_nms_step(self):
+        order = np.array([1, 2, 0])
+        x1 = np.array([0, 2, 3])
+        x2 = np.array([1, 3, 4])
+        y1 = np.array([0, 1, 0.5])
+        y2 = np.array([1, 2, 1.5])
+        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+        with tf.Session() as sess:
+            order = tf.constant(order, dtype=tf.int32)
+            x1, x2, y1, y2 = tf.constant(x1, dtype=tf.float32), tf.constant(x2, dtype=tf.float32), tf.constant(y1, dtype=tf.float32), tf.constant(y2, dtype=tf.float32)
+            keep = tf.Variable([0], dtype=tf.int32, name="keep")
+            threshold = tf.constant(0.5)
+            size = tf.constant(1.0)
+            areas = tf.constant(areas, dtype=tf.float32)
+            sess.run(tf.global_variables_initializer())
+            result = nms_step(order, x1, y1, x2, y2, areas, keep, threshold, size)
+
+            result_np = sess.run(result)
+            return np.allclose(result_np[-3], np.array([0, 1]))
 
 if __name__ == '__main__':
     unittest.main()

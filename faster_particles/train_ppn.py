@@ -72,8 +72,8 @@ class Trainer(object):
             else:
                 blob = self.train_toydata.forward()
 
-            #if step%1000 == 0:
-            print("Step %d" % step)
+            if step%100 == 0:
+                print("Step %d" % step)
 
             if is_testing:
                 summary, result = self.test_net.test_image(sess, blob)
