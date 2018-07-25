@@ -3,39 +3,52 @@
 
 import numpy as np
 import tensorflow as tf
+from sklearn.cluster import DBSCAN
 
-def nms_step(order, areas, keep, threshold, size, *args):
+def filter_points(im_proposals, im_scores, eps):
+    db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
+    keep = {}
+    index = {}
+    new_proposals = []
+    new_scores = []
+    clusters, index = np.unique(db, return_index=True)
+    for i in clusters:
+        indices = np.where(db == i)
+        new_proposals.append(np.average(im_proposals[indices], axis=0)) # weights=im_scores[indices]
+        new_scores.append(np.average(im_scores[indices], axis=0))
+    """for i in range(len(db)):
+        cluster = db[i]
+        if cluster not in keep.keys() or im_scores[i] > keep[cluster]:
+            keep[cluster] = im_scores[i]
+            index[cluster] = i
+    new_proposals = []
+    for cluster in keep:
+        new_proposals.append(im_proposals[index[cluster]])"""
+    return np.array(new_proposals), np.array(new_scores), index
+
+def nms_step(order, areas, proposals, new_proposals, keep, threshold, size, *args):
     i = order[0]
     keep = tf.concat([keep, [i]], axis=0)
     dim = len(args)/2
     inter = tf.ones((tf.shape(order)[0]-1,)) # area/volume of intersection
+    proposals_inside = proposals
     for d in range(dim):
         xx1 = tf.maximum(args[d][i], tf.gather(args[d], order[1:]))
         xx2 = tf.minimum(args[dim+d][i], tf.gather(args[dim+d], order[1:]))
         inter = inter * tf.maximum(0.0, xx2 - xx1 + 1)
+        indices_inside = tf.where(tf.logical_and(proposals_inside[:, d] >= args[d][i], proposals_inside[:, d] <= args[dim+d][i]))
+        proposals_inside = tf.gather_nd(proposals_inside, indices_inside)
+
     # Compute IoU
     ovr = inter / (tf.gather(areas, i) + tf.gather(areas, order[1:]) - inter)
     indices = tf.where(ovr <= threshold)
     new_order = tf.gather(order, indices + 1)[:, 0]
-    return (new_order, areas, keep, threshold, size) + args
+    current_coord = tf.reduce_mean(proposals_inside, axis=0)
+    #current_coord = proposals[i]
+    new_proposals = tf.concat([new_proposals[:i], [current_coord], new_proposals[i+1:]], axis=0)
+    return (new_order, areas, proposals, new_proposals, keep, threshold, size) + args
 
-def nms_step3d(order, x1, y1, z1, x2, y2, areas, keep, threshold, size):
-    i = order[0]
-    keep = tf.concat([keep, [i]], axis=0)
-    xx1 = tf.maximum(x1[i], tf.gather(x1, order[1:]))
-    yy1 = tf.maximum(y1[i], tf.gather(y1, order[1:]))
-    xx2 = tf.minimum(x2[i], tf.gather(x2, order[1:]))
-    yy2 = tf.minimum(y2[i], tf.gather(y2, order[1:]))
-
-    w = tf.maximum(0.0, xx2 - xx1 + 1)
-    h = tf.maximum(0.0, yy2 - yy1 + 1)
-    inter = w * h
-    ovr = inter / (tf.gather(areas, i) + tf.gather(areas, order[1:]) - inter)
-    indices = tf.where(ovr <= threshold)
-    new_order = tf.gather(order, indices + 1)[:, 0]
-    return new_order, x1, y1, x2, y2, areas, keep, threshold, size
-
-def nms(im_proposals, im_scores, threshold=0.000000001, size=5.0):
+def nms(im_proposals, im_scores, threshold=0.01, size=4.0):
     """
     Performs NMS (non maximal suppression) on proposed pixels.
     - Look at pixels in order of decreasing score
@@ -47,9 +60,9 @@ def nms(im_proposals, im_scores, threshold=0.000000001, size=5.0):
     coords = ()
     dim = im_proposals.get_shape()[-1]
     for d in range(dim):
-        coords = coords + (im_proposals[:, 0] - size,)
+        coords = coords + (im_proposals[:, d] - size,)
     for d in range(dim):
-        coords = coords + (im_proposals[:, 0] + size,)
+        coords = coords + (im_proposals[:, d] + size,)
     for d in range(dim):
         areas = areas * (coords[dim+d] - coords[d] + 1.0)
     coords_shape = ()
@@ -59,9 +72,11 @@ def nms(im_proposals, im_scores, threshold=0.000000001, size=5.0):
     keep = tf.Variable([0], dtype=tf.int32)
     threshold = tf.constant(threshold)
     size = tf.constant(size)
-    keep = tf.while_loop(lambda order, *args: tf.shape(order)[0] > 0, nms_step, [order, areas, keep, threshold, size] + list(coords), shape_invariants=[order.get_shape(), areas.get_shape(), tf.TensorShape((None,)), threshold.get_shape(), size.get_shape()] + list(coords_shape))[2]
-    keep = keep[1:]
-    return tf.gather(im_proposals, keep), tf.gather(im_scores, keep)
+    #new_proposals = tf.Variable(im_proposals, validate_shape=False)
+    while_return = tf.while_loop(lambda order, *args: tf.shape(order)[0] > 0, nms_step, [order, areas, im_proposals, im_proposals, keep, threshold, size] + list(coords), shape_invariants=[order.get_shape(), areas.get_shape(), im_proposals.get_shape(), im_proposals.get_shape(), tf.TensorShape((None,)), threshold.get_shape(), size.get_shape()] + list(coords_shape))
+    keep = while_return[4][1:]
+    new_proposals = while_return[3]
+    return new_proposals, keep
 
 def generate_anchors(im_shape, repeat=1):
     """
@@ -254,10 +269,10 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
         # convert proposals to real image coordinates in order to compare with
         # ground truth pixels coordinates
         if rois is not None: # means PPN2
-            # Convert to F3 coordinates
+            # Convert from F3 coordinates
             proposals = (proposals + dim2 * rois) * dim1
         else:
-            # Convert to F5 coordinates
+            # Convert from F5 coordinates
             proposals = proposals * dim1 * dim2
 
         # Tile to have shape (A*N*N, None, 2)

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
-from sklearn.cluster import DBSCAN
+from faster_particles.ppn_utils import filter_points
 
 def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     vertices = [
@@ -30,25 +30,6 @@ def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     poly.set_alpha(alpha)
     poly.set_facecolor(facecolors)
     ax.add_collection3d(poly)
-
-def filter_points(im_proposals, im_scores, eps):
-    db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
-    keep = {}
-    index = {}
-    new_proposals = []
-    for i in np.unique(db):
-        indices = np.where(db == i)
-        new_proposals.append(np.average(im_proposals[indices], axis=0)) # weights=im_scores[indices]
-
-    """for i in range(len(db)):
-        cluster = db[i]
-        if cluster not in keep.keys() or im_scores[i] > keep[cluster]:
-            keep[cluster] = im_scores[i]
-            index[cluster] = i
-    new_proposals = []
-    for cluster in keep:
-        new_proposals.append(im_proposals[index[cluster]])"""
-    return np.array(new_proposals)
 
 def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
     # Display original image
