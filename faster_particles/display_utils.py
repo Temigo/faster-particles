@@ -134,7 +134,7 @@ def display_gt_pixels(cfg, ax, gt_pixels):
             elif gt_pixel[2] == 2:
                 plt.plot([x], [y], 'go')
 
-def display_uresnet(blob, cfg, index=0, predictions=None, name='display', directory=''):
+def display_uresnet(blob, cfg, index=0, predictions=None, name='display', directory='', vmin=0, vmax=400):
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:
@@ -149,7 +149,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display', direct
     if predictions is not None:
         fig = plt.figure()
         ax = fig.add_subplot(111, aspect='equal', **kwargs)
-        display_original_image(blob, cfg, ax)
+        display_original_image(blob, cfg, ax, vmin=vmin, vmax=vmax)
         set_image_limits(cfg, ax)
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_original_%d.png' % index), bbox_inches='tight')
@@ -163,7 +163,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display', direct
             blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
         else:
             blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
-        display_original_image(blob_label, cfg, ax2, vmax=3.1, cmap='tab10')
+        display_original_image(blob_label, cfg, ax2, vmax=np.unique(blob_label['data']).shape[0]-1, cmap='tab10')
         set_image_limits(cfg, ax2)
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')

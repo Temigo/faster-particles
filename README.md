@@ -16,7 +16,7 @@ cd larcv2
 source configure.sh
 make
 ```
-You will also need Tensorflow.
+You will also need [Tensorflow](http://tensorflow.org/).
 
 ### Install
 The easiest way is to use Pip, although you will not get the latest changes:
@@ -48,7 +48,7 @@ The directories will be created if they do not exist yet.
 
 To train PPN on 1000 steps use:
 ```bash
-ppn train -o output/dir/ -l log/dir/ -d display/dir -n ppn -m 1000 --data path/to/data
+ppn train -o output/dir/ -l log/dir/ -d display/dir --net ppn -m 1000 --data path/to/data
 ```
 
 To train the base network (currently VGG and UResNet available) on track/shower classification task use:
@@ -57,6 +57,13 @@ ppn train -o output/dir/ -l log/dir/ -d display/dir --net base --base-net vgg -m
 ```
 
 To train on 3D data, use the argument `-3d` and don't forget to specify the image size with `-N` argument (e.g. 192 for a compression factor of 4, see `larcvdata_generator.py` for more details).
+
+To train PPN with UResNet base network pretrained weights, while freezing the base (pre-trained) layers,
+ a more complete command line would be
+```
+ppn train -o output/dir/ -l log/dir/ -d display/dir --net ppn --base-net uresnet -wb /path/to/uresnet/weights --freeze -N 512 -m 100
+```
+You can also load weights for PPN layers with the option `-wp`.
 
 ### Inference
 To run inference with a minimal score of 0.5 for predicted points:

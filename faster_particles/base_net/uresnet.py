@@ -4,8 +4,8 @@ import tensorflow.contrib.slim as slim
 from base_net import BaseNet
 
 class UResNet(BaseNet):
-    def __init__(self, cfg):
-        super(UResNet, self).__init__(cfg)
+    def __init__(self, cfg, N=0):
+        super(UResNet, self).__init__(cfg, N=N)
         self.fn_conv = slim.conv2d
         self.fn_conv_transpose = slim.conv2d_transpose
         if self.is_3d:
@@ -31,6 +31,10 @@ class UResNet(BaseNet):
 
     def test_image(self, sess, blob):
         predictions, summary = sess.run([self._predictions, self.summary_op], feed_dict=self.feed_dict(blob))
+        return summary, {'predictions': predictions}
+
+    def train_step_with_summary(self, sess, blobs):
+        _, summary, predictions = sess.run([self.train_op, self.summary_op, self._predictions], feed_dict=self.feed_dict(blobs))
         return summary, {'predictions': predictions}
 
     def resnet_module(self, input_tensor, num_outputs, trainable=True, kernel=(3,3), stride=1, scope='noscope'):

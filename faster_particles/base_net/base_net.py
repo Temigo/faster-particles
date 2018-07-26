@@ -9,8 +9,8 @@ class BaseNet(object):
     Skeleton class from which any base network should inherit.
     PPN will assume this class structure for the base network.
     """
-    def __init__(self, cfg):
-        self.N = cfg.IMAGE_SIZE
+    def __init__(self, cfg, N=0):
+        self.N = cfg.IMAGE_SIZE if N == 0 else N
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = cfg.LEARNING_RATE
         self.is_3d = cfg.DATA_3D

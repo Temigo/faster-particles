@@ -48,7 +48,7 @@ def nms_step(order, areas, proposals, new_proposals, keep, threshold, size, *arg
     new_proposals = tf.concat([new_proposals[:i], [current_coord], new_proposals[i+1:]], axis=0)
     return (new_order, areas, proposals, new_proposals, keep, threshold, size) + args
 
-def nms(im_proposals, im_scores, threshold=0.01, size=4.0):
+def nms(im_proposals, im_scores, threshold=0.01, size=6.0):
     """
     Performs NMS (non maximal suppression) on proposed pixels.
     - Look at pixels in order of decreasing score
