@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
-from sklearn.cluster import DBSCAN
+from faster_particles.ppn_utils import filter_points
 
 def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     vertices = [
@@ -30,25 +30,6 @@ def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     poly.set_alpha(alpha)
     poly.set_facecolor(facecolors)
     ax.add_collection3d(poly)
-
-def filter_points(im_proposals, im_scores, eps):
-    db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
-    keep = {}
-    index = {}
-    new_proposals = []
-    for i in np.unique(db):
-        indices = np.where(db == i)
-        new_proposals.append(np.average(im_proposals[indices], axis=0)) # weights=im_scores[indices]
-
-    """for i in range(len(db)):
-        cluster = db[i]
-        if cluster not in keep.keys() or im_scores[i] > keep[cluster]:
-            keep[cluster] = im_scores[i]
-            index[cluster] = i
-    new_proposals = []
-    for cluster in keep:
-        new_proposals.append(im_proposals[index[cluster]])"""
-    return np.array(new_proposals)
 
 def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
     # Display original image
@@ -83,31 +64,23 @@ def extract_voxels(data):
 
 def display_im_proposals(cfg, ax, im_proposals, im_scores, im_labels):
     if im_proposals is not None and im_scores is not None:
-        if len(im_proposals) > 0:
+        print(im_proposals)
+        print(im_scores)
+        """if len(im_proposals) > 0:
             eps = 20.0 #9.0
             if cfg.DATA_3D:
                 eps = 15.0 # FIXME
-            im_proposals = filter_points(im_proposals, im_scores, eps)
+            im_proposals = filter_points(im_proposals, im_scores, eps)"""
 
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
             #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
             if cfg.DATA_3D:
                 x, y, z = proposal[2], proposal[1], proposal[0]
-                if im_labels[i] == 0: # track
-                    ax.scatter([x], [y], [z], c='red')
-                elif im_labels[i] == 1: #shower
-                    ax.scatter([x], [y], [z], c='red')
-                else:
-                    raise Exception("Label unknown")
+                ax.scatter([x], [y], [z], c='red')
             else:
                 x, y = proposal[1], proposal[0]
-                if im_labels[i] == 0: # Track
-                    plt.plot([x], [y], 'ro')
-                elif im_labels[i] == 1: #Shower
-                    plt.plot([x], [y], 'ro')
-                else:
-                    raise Exception("Label unknown")
+                plt.plot([x], [y], 'ro')
     return im_proposals
 
 def display_rois(cfg, ax, rois, dim1, dim2):
@@ -151,7 +124,7 @@ def display_gt_pixels(cfg, ax, gt_pixels):
             elif gt_pixel[2] == 2:
                 plt.plot([x], [y], 'go')
 
-def display_uresnet(blob, cfg, index=0, predictions=None, name='display', directory=''):
+def display_uresnet(blob, cfg, index=0, predictions=None, name='display', directory='', vmin=0, vmax=400):
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:
@@ -166,7 +139,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display', direct
     if predictions is not None:
         fig = plt.figure()
         ax = fig.add_subplot(111, aspect='equal', **kwargs)
-        display_original_image(blob, cfg, ax)
+        display_original_image(blob, cfg, ax, vmin=vmin, vmax=vmax)
         set_image_limits(cfg, ax)
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_original_%d.png' % index), bbox_inches='tight')
@@ -180,7 +153,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, name='display', direct
             blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
         else:
             blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
-        display_original_image(blob_label, cfg, ax2, vmax=3.1, cmap='tab10')
+        display_original_image(blob_label, cfg, ax2, vmax=np.unique(blob_label['data']).shape[0]-1, cmap='tab10')
         set_image_limits(cfg, ax2)
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')
@@ -221,23 +194,23 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # --- FIGURE 1 : PPN1 ROI ---
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax)
-    #display_gt_pixels(cfg, ax, blob['gt_pixels'])
+    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
+    display_gt_pixels(cfg, ax, blob['gt_pixels'])
     display_rois(cfg, ax, rois, dim1, dim2)
     set_image_limits(cfg, ax)
     # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_proposals_%d.png' % index), bbox_inches='tight')
+    plt.savefig(os.path.join(directory, name + '_proposals_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
     plt.close(fig)
 
     # --- FIGURE 2 : PPN2 predictions ---
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax2, vmin=0, vmax=400, cmap='jet')
+    display_original_image(blob, cfg, ax2, vmin=0, vmax=1, cmap='jet')
     im_proposals = display_im_proposals(cfg, ax2, im_proposals, im_scores, im_labels)
     set_image_limits(cfg, ax2)
     #plt.show()
     # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
+    plt.savefig(os.path.join(directory, name + '_predictions_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
     plt.close(fig2)
     return im_proposals
 

@@ -4,8 +4,8 @@ import numpy as np
 import tensorflow as tf
 
 
-from demo_ppn import inference, inference_full
-from train_ppn import train_ppn, train_classification
+from demo_ppn import inference, inference_full, inference_ppn_ext
+from train_ppn import train_ppn, train_classification, train_small_uresnet
 
 
 
@@ -17,12 +17,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
 class PPNConfig(object):
     IMAGE_SIZE = 768 # 512
+    CROP_SIZE = 24
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
     NUM_CLASSES = 3
     R = 20
-    PPN1_SCORE_THRESHOLD = 0.5
+    PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
     LEARNING_RATE = 0.001
     LAMBDA_PPN = 0.5
@@ -31,11 +32,12 @@ class PPNConfig(object):
     WEIGHTS_FILE = None # Path to pretrained checkpoint
     WEIGHTS_FILE_BASE = None
     WEIGHTS_FILE_PPN = None
+    WEIGHTS_FILE_SMALL = None
     FREEZE = False # Whether to freeze the weights of base net
     NET = 'ppn'
     BASE_NET = 'vgg'
     MAX_STEPS = 100
-    WEIGHT_LOSS = True # FIXME make it False by default
+    WEIGHT_LOSS = False # FIXME make it False by default
     MIN_SCORE=0.0
 
     # Data configuration
@@ -52,7 +54,8 @@ class PPNConfig(object):
     # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
     # DATA = ""
     #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
-    DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
+    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
+    DATA = "/stage/drinkingkazu/fuckgrid/p*/larcv.root"
     DATA_3D = False
 
     # Track configuration
@@ -112,12 +115,13 @@ class PPNConfig(object):
         parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
         parser.add_argument("-wb", "--weights-file-base", help="Tensorflow .ckpt file to load weights of trained base network.")
         parser.add_argument("-wp", "--weights-file-ppn", help="Tensorflow .ckpt file to load weights of trained PPN.") # does not load base net weights
+        parser.add_argument("-ws", "--weights-file-small", help="Tensorflow .ckpt file to load weights of small UResNet.")
         parser.add_argument("-gpu", "--gpu", default=self.CUDA_VISIBLE_DEVICES, type=str, help="CUDA visible devices list (in a string and separated by commas).")
         parser.add_argument("-3d", "--data-3d", default=self.DATA_3D, action='store_true', help="Use 3D instead of 2D.")
         parser.add_argument("-data", "--data", default=self.DATA, type=str, help="Path to data files. Can use ls regex format.")
         parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
-        parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base', 'full'], help="Whether to use base net or PPN net or both.")
+        parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base', 'full', 'small_uresnet', 'ppn_ext'], help="Whether to use base net or PPN net or both.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, help="Width (and height) of image.")
         parser.add_argument("-mt", "--max-tracks", default=self.MAX_TRACKS, type=int, help="Maximum number of tracks generated per image (uniform distribution).")
         parser.add_argument("-mk", "--max-kinks", default=self.MAX_KINKS, type=int, help="Maximum number of kinks generated for any track.")
@@ -136,7 +140,7 @@ class PPNConfig(object):
         parser.add_argument("-png", "--shower-out-png", default=self.SHOWER_OUT_PNG, action='store_true')
         parser.add_argument("-ms", "--min-score", default=self.MIN_SCORE, type=float, help="Minimum score above which PPN predictions should be kept")
         parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
-	parser.add_argument("-ni", "--next-index", default=self.NEXT_INDEX, type=int, help="Index from which to start reading LArCV data file.")
+        parser.add_argument("-ni", "--next-index", default=self.NEXT_INDEX, type=int, help="Index from which to start reading LArCV data file.")
 
     def parse_args(self):
         args = self.parser.parse_args()
@@ -147,6 +151,10 @@ class PPNConfig(object):
         print("\n\n")
         if self.NET == 'base' and args.script == 'train':
             args.func = train_classification
+        elif self.NET == 'small_uresnet' and args.script == 'train':
+            args.func = train_small_uresnet
+        elif self.NET == 'ppn_ext' and args.script == 'demo':
+            args.func = inference_ppn_ext
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights without loading any checkpoint file.")
 

@@ -13,7 +13,7 @@ import sys, os
 
 from faster_particles.ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
-    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer
+    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer, nms, filter_points
 from faster_particles.base_net.vgg import VGG
 
 class PPN(object):
@@ -27,7 +27,7 @@ class PPN(object):
         """
         # Global parameters
         self.R = cfg.R
-        self.num_classes = cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
+        self.num_classes = 2#cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
         self.N = cfg.IMAGE_SIZE
         self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
         self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
@@ -160,7 +160,54 @@ class PPN(object):
 
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
+                # Testing time
+                # Turn predicted positions (float) into original image positions
+                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
+                # then back to original image.
+                # FIXME take top scores only? or leave it to the demo script
+                with tf.variable_scope("final_proposals"):
+                    im_proposals = tf.identity((proposals2 + self.dim2*rois)*self.dim1, name="im_proposals_raw")
+                    im_labels = tf.argmax(scores2, axis=1, name="im_labels_raw")
+                    #im_scores = tf.gather_nd(scores2, tf.concat([tf.reshape(tf.range(0, tf.shape(im_labels)[0]), (-1, 1)), tf.cast(tf.reshape(im_labels, (-1, 1)), tf.int32)], axis=1), name="im_scores_raw")
+                    #im_scores = scores2[:, 0] + scores2[:, 1]
+                    im_scores = tf.reshape(scores2, (-1,))
+                    #im_scores = scores2
+                    print(im_scores)
+                    # We have now num_roi proposals and corresponding labels in original image.
+                    keep = tf.where(im_scores > self.cfg.MIN_SCORE, name="keep_good_scores")[:, 0]
+                    print(keep)
+                    keep = tf.reshape(keep, (-1, 1))
+                    im_proposals = tf.gather_nd(im_proposals, keep, name="im_proposals")
+                    #im_labels = tf.gather_nd(im_labels, keep, name="im_labels")
+                    im_scores = tf.gather_nd(im_scores, keep, name="im_scores")
+                    print(im_proposals, im_scores)
+                    # Pixel NMS equivalent ?
+                    im_proposals, keep = nms(im_proposals, im_scores)
+                    im_proposals = tf.gather(im_proposals, keep)
+                    #im_labels = tf.gather(im_labels, keep)
+                    im_scores = tf.gather(im_scores, keep)
+                    # Use DBSCAN
+                    #im_proposals, im_scores, keep = tf.py_func(filter_points, [im_proposals, im_scores, 15.0 if self.cfg.DATA_3D else 20.0], [tf.float32, tf.float32, tf.int64])
+                    #im_labels = tf.gather(im_labels, keep)
+                    self._predictions['im_proposals'] = im_proposals
+                    self._predictions['im_labels'] = im_labels
+                    self._predictions['im_scores'] = im_scores
+
+                if self.is_training:
+                    distances = tf.zeros((tf.shape(im_proposals)[0], tf.shape(self.gt_pixels_placeholder)[0]))
+                    for i in range(self.dim):
+                        x1, x2 = tf.meshgrid(self.gt_pixels_placeholder[:, i], im_proposals[:, i])
+                        distances = distances + tf.pow(x1 - x2, 2)
+                    distances = tf.sqrt(distances, name="final_distances")
+                    closest_distance = tf.reduce_min(distances, axis=1, name="final_closest_distance")
+                    # Final loss for points: mean for all proposed points of distance to closest gt point
+                    self._losses['distance_final_point'] = tf.reduce_mean(tf.reduce_mean(closest_distance), name="distance_final_point")
+
                 # FIXME How to combine losses
+                #total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
+                #            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
+                #            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
+                #            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
                 total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
                             + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
                             + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
@@ -176,11 +223,15 @@ class PPN(object):
                     tf.summary.scalar('loss_ppn1_class', self._losses['loss_ppn1_class'])
                     tf.summary.scalar('loss_ppn2_point', self._losses['loss_ppn2_point'])
                     tf.summary.scalar('loss_ppn2_class', self._losses['loss_ppn2_class'])
-                    tf.summary.scalar('loss_ppn2_background', self._losses['loss_ppn2_background'])
-                    tf.summary.scalar('loss_ppn2_track', self._losses['loss_ppn2_track'])
-                    tf.summary.scalar('loss_ppn2_shower', self._losses['loss_ppn2_shower'])
-                    tf.summary.scalar('accuracy_ppn1', self._predictions['accuracy_ppn1'])
-                    tf.summary.scalar('accuracy_ppn2', self._predictions['accuracy_ppn2'])
+                    #tf.summary.scalar('loss_ppn2_background', self._losses['loss_ppn2_background'])
+                    #tf.summary.scalar('loss_ppn2_track', self._losses['loss_ppn2_track'])
+                    #tf.summary.scalar('loss_ppn2_shower', self._losses['loss_ppn2_shower'])
+                    #tf.summary.scalar('accuracy_class_ppn1', self._predictions['accuracy_ppn1'])
+                    #tf.summary.scalar('accuracy_class_ppn2', self._predictions['accuracy_ppn2'])
+                    tf.summary.scalar('distance_final_point', self._losses['distance_final_point'])
+
+                    relative_nb_points = tf.shape(im_proposals)[0] / tf.shape(self.gt_pixels_placeholder)[0]
+                    tf.summary.scalar('relative_nb_points', relative_nb_points)
 
                     with tf.variable_scope("optimizer"):
                         global_step = tf.Variable(0, trainable=False, name="global_step")
@@ -189,25 +240,6 @@ class PPN(object):
                         self.train_op = optimizer.minimize(total_loss, global_step=global_step)
 
                 self.summary_op = tf.summary.merge_all()
-
-                # Testing time
-                # Turn predicted positions (float) into original image positions
-                # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
-                # then back to original image.
-                # FIXME take top scores only? or leave it to the demo script
-                with tf.variable_scope("final_proposals"):
-                    im_proposals = tf.identity((proposals2 + self.dim2*rois)*self.dim1, name="im_proposals_raw")
-                    im_labels = tf.argmax(scores2, axis=1, name="im_labels_raw")
-                    im_scores = tf.gather_nd(scores2, tf.concat([tf.reshape(tf.range(0, tf.shape(im_labels)[0]), (-1, 1)), tf.cast(tf.reshape(im_labels, (-1, 1)), tf.int32)], axis=1), name="im_scores_raw")
-                    # We have now num_roi proposals and corresponding labels in original image.
-                    # Pixel NMS equivalent ?
-                    keep = tf.where(tf.greater(im_scores, self.cfg.MIN_SCORE), name="keep_good_scores")
-                    im_proposals = tf.gather_nd(im_proposals, keep, name="im_proposals")
-                    im_labels = tf.gather_nd(im_labels, keep, name="im_labels")
-                    im_scores = tf.gather_nd(im_scores, keep, name="im_scores")
-                    self._predictions['im_proposals'] = im_proposals
-                    self._predictions['im_labels'] = im_labels
-                    self._predictions['im_scores'] = im_scores
 
             with tf.variable_scope("", reuse=True):
                 self.x = tf.get_variable("uresnet/resnet_module2/module2/resnet_conv2/weights", dtype=tf.float32)
@@ -380,7 +412,7 @@ class PPN(object):
             # assert true_labels.get_shape().as_list() == [None, 1]
 
             # Positives now = pixels within certain distance range from
-            # the closest ground-truth point of the same class (track edge or shower start)
+            # the closest ground-truth point
             positives = compute_positives_ppn2(closest_gt_distance, threshold=self.ppn2_distance_threshold)
             # assert positives.get_shape().as_list() == [None, 1]
 
@@ -393,6 +425,7 @@ class PPN(object):
             # the true label is defined by the closest ground truth point’s label
             # Negatives true labels should be background = 0
             labels_ppn2 = tf.cast(tf.reshape(tf.cast(positives, tf.float32)*true_labels, (-1,)), tf.int32, name="labels_ppn2")
+            labels_ppn2 = tf.where(labels_ppn2 > 0, tf.ones_like(labels_ppn2), tf.zeros_like(labels_ppn2))
             logits = tf.reshape(ppn2_cls_score, (-1, self.num_classes), name="ppn2_logits")
 
             if self.cfg.WEIGHT_LOSS:
@@ -426,9 +459,9 @@ class PPN(object):
             self._predictions['ppn2_positives'] = positives
             self._losses['loss_ppn2_point'] = loss_ppn2_point
             self._losses['loss_ppn2_class'] = loss_ppn2_class
-            self._losses['loss_ppn2_background'] = loss_ppn2_background
-            self._losses['loss_ppn2_track'] = loss_ppn2_track
-            self._losses['loss_ppn2_shower'] = loss_ppn2_shower
+            #self._losses['loss_ppn2_background'] = loss_ppn2_background
+            #self._losses['loss_ppn2_track'] = loss_ppn2_track
+            #self._losses['loss_ppn2_shower'] = loss_ppn2_shower
             self._predictions['accuracy_ppn2'] = accuracy_ppn2
             self._predictions['ppn2_true_labels'] = true_labels
             self._predictions['ppn2_closest_gt_distance'] = closest_gt_distance

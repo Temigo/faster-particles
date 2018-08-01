@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 import os
+import numpy as np
 
 from faster_particles.ppn import PPN
 from faster_particles import ToydataGenerator
@@ -66,26 +67,45 @@ class Trainer(object):
         while step < self.cfg.MAX_STEPS+1:
             step += 1
             is_testing = step%10 == 5
-            is_drawing = step%100 == 0
+            is_drawing = step%1000 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:
                 blob = self.train_toydata.forward()
 
-            #if step%1000 == 0:
-            print("Step %d" % step)
+            if step%100 == 0:
+                print("Step %d" % step)
 
-            if is_testing:
-                summary, result = self.test_net.test_image(sess, blob)
-                summary_writer_test.add_summary(summary, step)
+            if self.cfg.NET == 'small_uresnet':
+                blob['data'] = np.reshape(blob['crops'], (-1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE, 1))
+                blob['labels'] = np.reshape(blob['crops_labels'], (-1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE))
+                if is_testing:
+                    summary, result = self.test_net.test_image(sess, blob)
+                    summary_writer_test.add_summary(summary, step)
+                else:
+                    summary, result = self.train_net.train_step_with_summary(sess, blob)
+                    summary_writer_train.add_summary(summary, step)
+                for i in range(len(blob['crops'])):
+                    blob_i = {'data': np.reshape(blob['crops'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE, 1)), 'labels': np.reshape(blob['crops_labels'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE))}
+                    #print(result)
+                    #print(blob_i['labels'])
+                    if is_drawing and self.display is not None:
+                        N = self.cfg.IMAGE_SIZE
+                        self.cfg.IMAGE_SIZE = self.cfg.CROP_SIZE
+                        self.display(blob_i, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), vmin=0, vmax=1, predictions=np.reshape(result['predictions'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE)))
+                        self.cfg.IMAGE_SIZE = N
             else:
-                summary, result = self.train_net.train_step_with_summary(sess, blob)
-                summary_writer_train.add_summary(summary, step)
-            if is_drawing and self.display is not None:
-                if self.cfg.NET == 'ppn':
-                    result['dim1'] = self.train_net.dim1
-                    result['dim2'] = self.train_net.dim2
-                self.display(blob, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), **result)
+                if is_testing:
+                    summary, result = self.test_net.test_image(sess, blob)
+                    summary_writer_test.add_summary(summary, step)
+                else:
+                    summary, result = self.train_net.train_step_with_summary(sess, blob)
+                    summary_writer_train.add_summary(summary, step)
+                if is_drawing and self.display is not None:
+                    if self.cfg.NET == 'ppn':
+                        result['dim1'] = self.train_net.dim1
+                        result['dim2'] = self.train_net.dim2
+                    self.display(blob, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), **result)
 
             if step%1000 == 0:
                 save_path = saver.save(sess, os.path.join(self.outputdir, "model-%d.ckpt" % step))
@@ -130,6 +150,14 @@ def train_classification(cfg):
         display_util = display_uresnet
     t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg, display_util=display_util)
     t.train(net_args, scope=cfg.BASE_NET)
+
+def train_small_uresnet(cfg):
+    filelist = get_filelist(cfg.DATA)
+    train_data = LarcvGenerator(cfg, ioname="train", filelist=filelist)
+    test_data = LarcvGenerator(cfg, ioname="test", filelist=filelist)
+    t = Trainer(basenets[cfg.BASE_NET], train_data, test_data, cfg, display_util=display_uresnet)
+    net_args = {"N": cfg.CROP_SIZE}
+    t.train(net_args, scope="small_uresnet")
 
 if __name__ == '__main__':
     #train_ppn(cfg)

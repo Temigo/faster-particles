@@ -69,16 +69,9 @@ class LarcvGenerator(object):
 
         self.proc = larcv_threadio()
         self.proc.configure(dataloader_cfg)
-        #self.proc.set_next_index(10345)
         self.proc.set_next_index(cfg.NEXT_INDEX)
         self.proc.start_manager(self.batch_size)
         self.proc.next()
-
-
-        # Retrieve voxel sparse for track/shower only
-        from ROOT import TChain
-        self.ch = TChain("sparse3d_data_tree")
-        self.ch.AddFile(cfg.DATA)
 
     def __del__(self):
         self.proc.stop_manager()
@@ -167,36 +160,16 @@ class LarcvGenerator(object):
             final_entries.append(entry_id)
             voxels = self.extract_voxels(image)
 
-            """
-            entry    = batch_entries.data()[index]
-            event_id = batch_event_ids.data()
-            self.ch.GetEntry(entry)
-            event_data = self.ch.sparse3d_data_branch
-            vox_array = event_data.as_vector()
-            for vox in vox_array:
-                pos = event_data.meta().position(vox.id())
-                #print(vox.id(), vox.value(), '...', pos.x,pos.y,pos.z)
-                #x, y, z = (self.N/768.0 * pos.x, self.N/768.0 * pos.y, self.N/768.0 * pos.z) # FIXME hardcoded
-                x, y, z = pos.x, pos.y, pos.z
-                x, y, z = (int(x), int(y), int(z))
-                #voxels[x][y][z] = True # FIXME add value information
-                voxels.append([x, y, z])
-                # FIXME check this is the correct entry()"""
-
             image = image.reshape(img_shape)
 
             # TODO set N from this
-            #image_dim = batch_image.dim()
-            #image = image.reshape(image_dim[1:3])
-            #output.append(np.repeat(image.reshape([1, self.N, self.N, 1]), 3, axis=3)) # FIXME VGG needs RGB channels?
-            #print(t_points, s_points)
             gt_pixels.extend(self.extract_gt_pixels(t_points, s_points))
             if len(gt_pixels) > 0:
                 output.append(image)
 
         if len(output) == 0: # No gt pixels in this batch - try next batch
             print("DUMP")
-            return self.forward()
+            return self.forward_ppn()
 
         # TODO For now we only consider batch size 1
         output = np.reshape(np.array(output), img_shape)
@@ -207,6 +180,44 @@ class LarcvGenerator(object):
         blob['gt_pixels'] = np.array(gt_pixels)
         blob['voxels'] = np.array(voxels)
         blob['entries'] = final_entries
+        return blob
+
+    def forward_small_uresnet(self):
+        blob = self.forward_ppn()
+        # Crop regions around gt points
+        # TODO add random
+        N = self.cfg.CROP_SIZE
+        coords0 = np.floor(blob['gt_pixels'][:, :-1] - N/2.0).astype(int)
+        coords1 = np.floor(blob['gt_pixels'][:, :-1] + N/2.0).astype(int)
+        dim = blob['gt_pixels'].shape[-1] - 1
+        smear = np.random.randint(-12, high=12, size=dim)
+        coords0 = np.clip(coords0 + smear, 0, self.cfg.IMAGE_SIZE-1)
+        coords1 = np.clip(coords1 + smear, 0, self.cfg.IMAGE_SIZE-1)
+        crops = np.zeros((coords0.shape[0], N, N))
+        crops_labels = np.zeros_like(crops)
+        for j in range(len(coords0)):
+            padding = []
+            for d in range(dim):
+                pad = np.maximum(N - (coords1[j, d] - coords0[j, d]), 0)
+                if coords0[j, d] == 0.0:
+                    padding.append((pad, 0))
+                else:
+                    padding.append((0, pad))
+
+            crops[j] = np.pad(blob['data'][0, coords0[j, 0]:coords1[j, 0], coords0[j, 1]:coords1[j, 1], 0], padding, 'constant')
+            indices = np.where(crops[j] > 0)
+            crops_labels[j][indices] = 1
+            #crops_labels[j][indices[np.where(np.logical_and(indices >= int(N/2 - 1), indices <= int(N/2 + 1)))]] = 2
+
+            indices = np.where(crops[j, int(N/2-1-smear[0]):int(N/2+1-smear[0]), int(N/2-1-smear[1]):int(N/2+1-smear[1])] > 0)
+            a = indices[0] + int(N/2 - 1-smear[0])
+            b = indices[1] + int(N/2 - 1-smear[1])
+            #for a in indices:
+            #    a = a + int(N/2 - 1)
+            crops_labels[j][a, b] = 2
+
+        blob['crops'] = crops
+        blob['crops_labels'] = crops_labels
         return blob
 
     def forward_ppn_uresnet(self):
@@ -260,26 +271,28 @@ class LarcvGenerator(object):
 
     def forward(self):
         # Now using a file with combined uresnet and ppn information
-        print(self.train_uresnet, self.cfg.NET)
         if self.train_uresnet:
             return self.forward_uresnet()
         elif self.cfg.NET == 'full':
             return self.forward_ppn_uresnet()
+        elif self.cfg.NET == 'small_uresnet':
+            return self.forward_small_uresnet()
         else:
             return self.forward_ppn()
 
 if __name__ == '__main__':
     class MyCfg:
-        IMAGE_SIZE = 192
+        IMAGE_SIZE = 512
         SEED = 123
         BATCH_SIZE = 1
-        DATA_3D = True
-        DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root"
+        DATA_3D = False
+        NET = "small_uresnet"
+        BASE = "uresnet"
+        NEXT_INDEX = 0
+        CROP_SIZE = 24
 
-    t = LarcvGenerator(MyCfg(), ioname='test', filelist='["/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root"]')
-    for i in range(2):
+    t = LarcvGenerator(MyCfg(), ioname='test', filelist='["/stage/drinkingkazu/fuckgrid/p00/larcv.root"]')
+    for i in range(1):
         blobdict = t.forward()
         print(blobdict['data'].shape)
         print("gt pixels shape ", blobdict['gt_pixels'].shape)
-        print("gt pixels ", blobdict['gt_pixels'])
-        print("voxels ", blobdict['voxels'])
