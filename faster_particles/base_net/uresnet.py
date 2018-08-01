@@ -16,13 +16,13 @@ class UResNet(BaseNet):
         self.base_num_outputs = 16
         self._num_strides = 3#4
 
-    def init_placeholders(self):
+    def init_placeholders(self, image=None, labels=None):
         if self.is_3d:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image_uresnet")
-            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N, self.N), name="image_label")
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image_uresnet") if image is None else image
+            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N, self.N), name="image_label") if labels is None else labels
         else:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image_uresnet")
-            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N), name="image_label")
+            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image_uresnet") if image is None else image
+            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N), name="image_label") if labels is None else labels
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
         return [("image_placeholder", "image_uresnet"), ("learning_rate_placeholder", "lr"), ("pixel_labels_placeholder", "image_label")]
 
@@ -98,8 +98,8 @@ class UResNet(BaseNet):
                                     scope='module2')
         return resnet2
 
-    def build_base_net(self, image_placeholder, is_training=True, reuse=False):
-        with tf.variable_scope("uresnet", reuse=reuse):
+    def build_base_net(self, image_placeholder, is_training=True, reuse=False, scope="uresnet"):
+        with tf.variable_scope(scope, reuse=reuse):
             with slim.arg_scope([self.fn_conv, slim.fully_connected],
                                 normalizer_fn=slim.batch_norm,
                                 trainable=is_training):
@@ -135,7 +135,7 @@ class UResNet(BaseNet):
         with slim.arg_scope([self.fn_conv, self.fn_conv_transpose, slim.fully_connected],
                             normalizer_fn=slim.batch_norm,
                             trainable=is_training):
-            _, net = self.build_base_net(self.image_placeholder, is_training=is_training, reuse=reuse)
+            _, net = self.build_base_net(self.image_placeholder, is_training=is_training, reuse=reuse, scope=scope)
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
                 for step in xrange(self._num_strides):
@@ -183,27 +183,27 @@ class UResNet(BaseNet):
                 self._softmax = tf.nn.softmax(logits=net)
                 self._predictions = tf.argmax(self._softmax, axis=-1)
 
-            # Define loss
-            dims = self.image_placeholder.get_shape()[1:]
-            with tf.variable_scope('metrics'):
-                labels = tf.argmax(net, axis=len(dims), output_type=tf.int32)
-                self.accuracy_allpix = tf.reduce_mean(tf.cast(tf.equal(labels, self.pixel_labels_placeholder),tf.float32))
-                nonzero_idx = tf.where(tf.reshape(self.image_placeholder, tf.shape(self.image_placeholder)[:-1]) > tf.to_float(0.))
-                nonzero_label = tf.gather_nd(self.pixel_labels_placeholder, nonzero_idx)
-                nonzero_pred  = tf.gather_nd(labels, nonzero_idx)
-                self.accuracy_nonzero = tf.reduce_mean(tf.cast(tf.equal(nonzero_label, nonzero_pred), tf.float32))
-                tf.summary.scalar('accuracy_all', self.accuracy_allpix)
-                tf.summary.scalar('accuracy_nonzero', self.accuracy_nonzero)
+                # Define loss
+                dims = self.image_placeholder.get_shape()[1:]
 
-            if is_training:
-                self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.pixel_labels_placeholder, logits=net)
-                self._loss = tf.reduce_mean(tf.reduce_sum(tf.reshape(self._loss, [-1, int(np.prod(dims) / dims[-1])]), axis=1))
-                tf.summary.scalar('loss', self._loss)
+                if is_training:
+                    with tf.variable_scope('metrics'):
+                        labels = tf.argmax(net, axis=len(dims), output_type=tf.int32)
+                        self.accuracy_allpix = tf.reduce_mean(tf.cast(tf.equal(labels, self.pixel_labels_placeholder),tf.float32))
+                        nonzero_idx = tf.where(tf.reshape(self.image_placeholder, tf.shape(self.image_placeholder)[:-1]) > tf.to_float(0.))
+                        nonzero_label = tf.gather_nd(self.pixel_labels_placeholder, nonzero_idx)
+                        nonzero_pred  = tf.gather_nd(labels, nonzero_idx)
+                        self.accuracy_nonzero = tf.reduce_mean(tf.cast(tf.equal(nonzero_label, nonzero_pred), tf.float32))
+                        tf.summary.scalar('accuracy_all', self.accuracy_allpix)
+                        tf.summary.scalar('accuracy_nonzero', self.accuracy_nonzero)
+                    self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.pixel_labels_placeholder, logits=net)
+                    self._loss = tf.reduce_mean(tf.reduce_sum(tf.reshape(self._loss, [-1, int(np.prod(dims) / dims[-1])]), axis=1))
+                    tf.summary.scalar('loss', self._loss)
 
-                self.train_op = tf.train.AdamOptimizer(self.learning_rate_placeholder).minimize(self._loss)
+                    self.train_op = tf.train.AdamOptimizer(self.learning_rate_placeholder).minimize(self._loss)
 
-            # Define summary
-            self.summary_op = tf.summary.merge_all()
+                # Define summary
+                self.summary_op = tf.summary.merge_all()
 
 if __name__ == '__main__':
     class config(object):

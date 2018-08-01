@@ -77,20 +77,10 @@ def display_im_proposals(cfg, ax, im_proposals, im_scores, im_labels):
             #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
             if cfg.DATA_3D:
                 x, y, z = proposal[2], proposal[1], proposal[0]
-                if im_labels[i] == 0: # track
-                    ax.scatter([x], [y], [z], c='red')
-                elif im_labels[i] == 1: #shower
-                    ax.scatter([x], [y], [z], c='red')
-                else:
-                    raise Exception("Label unknown")
+                ax.scatter([x], [y], [z], c='red')
             else:
                 x, y = proposal[1], proposal[0]
-                if im_labels[i] == 0: # Track
-                    plt.plot([x], [y], 'ro')
-                elif im_labels[i] == 1: #Shower
-                    plt.plot([x], [y], 'ro')
-                else:
-                    raise Exception("Label unknown")
+                plt.plot([x], [y], 'ro')
     return im_proposals
 
 def display_rois(cfg, ax, rois, dim1, dim2):

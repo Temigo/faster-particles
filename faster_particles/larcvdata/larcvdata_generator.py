@@ -190,7 +190,7 @@ class LarcvGenerator(object):
         coords0 = np.floor(blob['gt_pixels'][:, :-1] - N/2.0).astype(int)
         coords1 = np.floor(blob['gt_pixels'][:, :-1] + N/2.0).astype(int)
         dim = blob['gt_pixels'].shape[-1] - 1
-        smear = np.random.randint(-3, high=3, size=dim)
+        smear = np.random.randint(-12, high=12, size=dim)
         coords0 = np.clip(coords0 + smear, 0, self.cfg.IMAGE_SIZE-1)
         coords1 = np.clip(coords1 + smear, 0, self.cfg.IMAGE_SIZE-1)
         crops = np.zeros((coords0.shape[0], N, N))

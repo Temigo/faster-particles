@@ -211,12 +211,11 @@ class PPN(object):
                 total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
                             + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
                             + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")                
+                            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
                 self._losses['total_loss'] = total_loss
                 tf.summary.scalar('loss', total_loss)
 
                 if self.is_training:
-                    im_proposals
                     tf.summary.scalar('ppn1_positives', tf.reduce_sum(tf.cast(self._predictions['ppn1_positives'], tf.float32), name="ppn1_positives"))
                     tf.summary.scalar('ppn2_positives', tf.reduce_sum(tf.cast(self._predictions['ppn2_positives'], tf.float32), name="ppn2_positives"))
 
@@ -413,7 +412,7 @@ class PPN(object):
             # assert true_labels.get_shape().as_list() == [None, 1]
 
             # Positives now = pixels within certain distance range from
-            # the closest ground-truth point 
+            # the closest ground-truth point
             positives = compute_positives_ppn2(closest_gt_distance, threshold=self.ppn2_distance_threshold)
             # assert positives.get_shape().as_list() == [None, 1]
 
