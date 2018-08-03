@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='faster-particles',
-    version='0.2.1',
+    version='0.3.0',
     author='Laura Domine, Ji Won Park, Kazuhiro Terao',
     author_email='temigo@gmx.com',
     packages=find_packages(),
