@@ -8,30 +8,22 @@ This package includes the following:
 * Pixel Proposal Network implementation
 
 ## Contents
-1. [Installation](#1.-Installation)
+1. [Installation](#1-installation)
+    1. [Dependencies](#1.1-dependencies)
+    1. [Install](#1.2-install)
+2. [Usage](#2-usage)
+    1. [Dataset](#2.1-dataset)
+    2. [Directories options](#2.2-directories-options)
+    3. [Network architectures and weights options](#2.3-network)
+    4. [Most common options](#2.4-options)
+    5. [Examples](#2.5-examples)
 
-  1.1. [Dependencies](#1.1-Dependencies)
-
-  1.2. [Install](#1.2-Install)
-
-2. [Usage](#2.-Usage)
-
-  2.1. [Dataset](#2.1-Dataset)
-
-  2.2 [Directories options](#2.2-Directories-options)
-
-  2.3 [Network architectures and weights options](#2.3-Network-architectures-and-weights-options)
-
-  2.4 [Most common options](#2.4-Most-common-options)
-
-  2.5 [Examples](#2.5-Examples)
-  
 ## License
 This code is released under the MIT License (refer to the LICENSE file for more details).
 
 
-## 1. Installation
-### 1.1 Dependencies
+## 1. Installation <a name="1-installation">
+### 1.1 Dependencies <a name="1.1-dependencies"></a>
 You must install [larcv2](https://github.com/DeepLearnPhysics/larcv2) and its
 own dependencies (ROOT, OpenCV, Numpy) in order to use LArCV data interface.
 To install `larcv2`:
@@ -43,7 +35,7 @@ make
 ```
 You will also need [Tensorflow](http://tensorflow.org/).
 
-### 1.2 Install
+### 1.2 Install <a name="1.2-install"></a>
 The easiest way is to use Pip, although you will not get the latest changes:
 ```bash
 pip install faster-particles
@@ -56,12 +48,12 @@ git clone https://github.com/Temigo/faster-particles.git
 cd faster-particles
 ```
 
-## 2. Usage
+## 2. Usage <a name="2-usage"></a>
 
 **The following assumes you installed with pip. If you cloned the source, make
 sure you are in the root directory and replace `ppn` with `python faster_particles/bin/ppn.py`.**
 
-### 2.1 Dataset
+### 2.1 Dataset <a name="2.1-dataset"></a>
 **Toydata**
 To use toydata rather than LArCV data in the following sections, use the option `--toydata`.
 *This is an old option which has not been tested for a while and which should be deprecated soon.*
@@ -72,14 +64,14 @@ Some data files are publicly available at [DeepLearnPhysics](http://deeplearnphy
 
 The generic usage is `ppn train/demo [directories options] [network architecture] [weights options] [network options] [other options]`. `train` is for training networks, `demo` is for running inference.
 
-### 2.2 Directories options
+### 2.2 Directories options <a name="2.2-directories-options"></a>
 The program output is divided between:
 * Output directory (option `-o`): with all the weights
 * Log directory (option `-l`): to store all Tensorflow logs (and visualize them with Tensorboard)
 * Display directory (option `-d`): stores regular snapshots taken during training of PPN1 and PPN2 proposals compared to ground truth.
 The directories will be created if they do not exist yet. At training time all of them are required. At inference time only the display directory is required.
 
-### 2.3 Network architectures and weights options
+### 2.3 Network architectures and weights options <a name="2.3-network"></a>
 #### Training
 | Network trained | Command to run | Pretrained weights (optional) |
 | --------------- | -------------------- | -------|
@@ -99,7 +91,7 @@ Use the command `ppn demo -d display/dir -m N_inferences` followed by:
 | PPN + UResNet         | `--base-net uresnet --net full` | `--wb uresnet.ckpt --wp ppn.ckpt` |
 | PPN + Small UResNet   | `--base-net uresnet --net ppn_ext` | `--wp ppn.ckpt --ws small_uresnet.ckpt` |
 
-### 2.4 Most common options
+### 2.4 Most common options <a name="2.4-options"></a>
 |Option|Explanation|
 |-----|----|
 |`-m`| Number of steps / images to run on |
@@ -110,7 +102,7 @@ Use the command `ppn demo -d display/dir -m N_inferences` followed by:
 
 More options such as thresholds are available through `ppn train -h` and `ppn demo -h` respectively.
 
-### 2.5 Examples
+### 2.5 Examples <a name="2.5-examples"></a>
 To train PPN on 1000 steps use:
 ```bash
 ppn train -o output/dir/ -l log/dir/ -d display/dir --net ppn -m 1000 --data path/to/data
