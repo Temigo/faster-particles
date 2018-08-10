@@ -171,7 +171,7 @@ def inference_ppn_ext(cfg):
     #crops = tf.train.batch([crops], 1, shapes=[tf.TensorShape((cfg.CROP_SIZE, cfg.CROP_SIZE))], dynamic_pad=True, allow_smaller_final_batch=False, enqueue_many=True)
     net_uresnet = UResNet(cfg=cfg, N=cfg.CROP_SIZE)
     # FIXME remove dependency on labels at test time
-    net_uresnet.init_placeholders(image=tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE, 1)), labels=crops)
+    net_uresnet.init_placeholders(image=tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE, 1)), labels=tf.cast(tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE)), dtype=tf.int32))
     net_uresnet.create_architecture(is_training=False, scope='small_uresnet')
     inference = []
     with tf.Session() as sess:
@@ -191,7 +191,8 @@ def inference_ppn_ext(cfg):
                 net_ppn._predictions['im_scores'],
                 net_ppn._predictions['rois'],
                 crops,
-                net_uresnet._predictions
+                net_uresnet._predictions,
+                net_uresnet._scores
             ], feed_dict={net_ppn.image_placeholder: blobs[i]['data'], net_ppn.gt_pixels_placeholder: blobs[i]['gt_pixels']})
             print(results[5].shape)
             print(results[0].shape)
@@ -217,7 +218,8 @@ def inference_ppn_ext(cfg):
                 # FIXME generate labels from gt ?
                 blob_j['labels'] = blob_j['data'][:, :, :, 0]
                 pred = np.reshape(results[5][j], (1, cfg.CROP_SIZE, cfg.CROP_SIZE))
-                display_uresnet(blob_j, cfg, index=i*100+j, name='display_train', directory=os.path.join(cfg.DISPLAY_DIR, 'demo'), vmin=0, vmax=1, predictions=pred)
+                scores = np.reshape(results[6][j], (1, cfg.CROP_SIZE, cfg.CROP_SIZE))
+                display_uresnet(blob_j, cfg, index=i*100+j, name='display_train', directory=os.path.join(cfg.DISPLAY_DIR, 'demo'), vmin=0, vmax=1, predictions=pred, scores=scores)
 
             cfg.IMAGE_SIZE = N
 

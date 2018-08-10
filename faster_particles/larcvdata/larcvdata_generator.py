@@ -17,6 +17,8 @@ larcv.ThreadProcessor
 from larcv.dataloader2 import larcv_threadio
 import tempfile
 
+from faster_particles.ppn_utils import crop
+
 class LarcvGenerator(object):
     CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
@@ -149,8 +151,9 @@ class LarcvGenerator(object):
         #batch_entries = self.proc.fetch_entries()
         #batch_event_ids = self.proc.fetch_event_ids()
 
-        gt_pixels, output, final_entries = [], [], []
+        gt_pixels, output, output_voxels, final_entries = [], [], [], []
         img_shape = (1,) + (self.N,) * self.dim + (1,)
+        voxels_shape = (-1, self.dim)
         for index in np.arange(self.batch_size):
             image    = batch_image.data()  [index]
             t_points = batch_track.data()  [index]
@@ -166,6 +169,7 @@ class LarcvGenerator(object):
             gt_pixels.extend(self.extract_gt_pixels(t_points, s_points))
             if len(gt_pixels) > 0:
                 output.append(image)
+                #output_voxels.append(voxels)
 
         if len(output) == 0: # No gt pixels in this batch - try next batch
             print("DUMP")
@@ -173,6 +177,7 @@ class LarcvGenerator(object):
 
         # TODO For now we only consider batch size 1
         output = np.reshape(np.array(output), img_shape)
+        #output_voxels = np.reshape(np.array(output_voxels), voxels_shape)
 
         blob = {}
         blob['data'] = output.astype(np.float32)
@@ -185,39 +190,7 @@ class LarcvGenerator(object):
     def forward_small_uresnet(self):
         blob = self.forward_ppn()
         # Crop regions around gt points
-        # TODO add random
-        N = self.cfg.CROP_SIZE
-        coords0 = np.floor(blob['gt_pixels'][:, :-1] - N/2.0).astype(int)
-        coords1 = np.floor(blob['gt_pixels'][:, :-1] + N/2.0).astype(int)
-        dim = blob['gt_pixels'].shape[-1] - 1
-        smear = np.random.randint(-12, high=12, size=dim)
-        coords0 = np.clip(coords0 + smear, 0, self.cfg.IMAGE_SIZE-1)
-        coords1 = np.clip(coords1 + smear, 0, self.cfg.IMAGE_SIZE-1)
-        crops = np.zeros((coords0.shape[0], N, N))
-        crops_labels = np.zeros_like(crops)
-        for j in range(len(coords0)):
-            padding = []
-            for d in range(dim):
-                pad = np.maximum(N - (coords1[j, d] - coords0[j, d]), 0)
-                if coords0[j, d] == 0.0:
-                    padding.append((pad, 0))
-                else:
-                    padding.append((0, pad))
-
-            crops[j] = np.pad(blob['data'][0, coords0[j, 0]:coords1[j, 0], coords0[j, 1]:coords1[j, 1], 0], padding, 'constant')
-            indices = np.where(crops[j] > 0)
-            crops_labels[j][indices] = 1
-            #crops_labels[j][indices[np.where(np.logical_and(indices >= int(N/2 - 1), indices <= int(N/2 + 1)))]] = 2
-
-            indices = np.where(crops[j, int(N/2-1-smear[0]):int(N/2+1-smear[0]), int(N/2-1-smear[1]):int(N/2+1-smear[1])] > 0)
-            a = indices[0] + int(N/2 - 1-smear[0])
-            b = indices[1] + int(N/2 - 1-smear[1])
-            #for a in indices:
-            #    a = a + int(N/2 - 1)
-            crops_labels[j][a, b] = 2
-
-        blob['crops'] = crops
-        blob['crops_labels'] = crops_labels
+        blob['crops'], blob['crops_labels'] = crop(blob['gt_pixels'][:, :-1], self.cfg.CROP_SIZE, blob['data'])
         return blob
 
     def forward_ppn_uresnet(self):

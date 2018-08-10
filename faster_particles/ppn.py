@@ -28,7 +28,7 @@ class PPN(object):
         # Global parameters
         self.R = cfg.R
         self.num_classes = 2#cfg.NUM_CLASSES # (B)ackground, (T)rack edge, (S)hower start, (S+T)
-        self.N = cfg.IMAGE_SIZE
+        self.N = cfg.SLICE_SIZE if cfg.ENABLE_CROP else cfg.IMAGE_SIZE
         self.ppn1_score_threshold = cfg.PPN1_SCORE_THRESHOLD
         self.ppn2_distance_threshold = cfg.PPN2_DISTANCE_THRESHOLD
         self.lr = cfg.LEARNING_RATE # Learning rate

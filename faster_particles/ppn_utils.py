@@ -5,6 +5,45 @@ import numpy as np
 import tensorflow as tf
 from sklearn.cluster import DBSCAN
 
+def crop(patch_centers, N, data):
+    coords0 = np.floor(patch_centers - N/2.0).astype(int) # bottom left corner
+    coords1 = np.floor(patch_centers + N/2.0).astype(int) # top right corner
+    dim = len(data.shape) - 2
+    print("dim: ", dim, "patch_centers: ", patch_centers.shape, 'data: ', data.shape)
+    smear = np.random.randint(-N/2+1, high=N/2, size=dim)
+    image_size = data.shape[1]
+    coords0 = np.clip(coords0 + smear, 0, image_size-1)
+    coords1 = np.clip(coords1 + smear, 0, image_size-1)
+    crops = np.zeros((coords0.shape[0],) + (N,) * dim)
+    crops_labels = np.zeros_like(crops)
+    for j in range(len(coords0)):
+        padding = []
+        for d in range(dim):
+            pad = np.maximum(N - (coords1[j, d] - coords0[j, d]), 0)
+            if coords0[j, d] == 0.0:
+                padding.append((pad, 0))
+            else:
+                padding.append((0, pad))
+        if dim == 2:
+            crops[j] = np.pad(data[0, coords0[j, 0]:coords1[j, 0], coords0[j, 1]:coords1[j, 1], 0], padding, 'constant')
+        else: # dim == 3
+            crops[j] = np.pad(data[0, coords0[j, 0]:coords1[j, 0], coords0[j, 1]:coords1[j, 1], coords0[j, 2]:coords1[j, 2], 0], padding, 'constant')
+        indices = np.where(crops[j] > 0)
+        crops_labels[j][indices] = 1
+        # Define vertex window to be 3x3
+        if dim == 2:
+            indices = np.where(crops[j, int(N/2-1-smear[0]):int(N/2+2-smear[0]), int(N/2-1-smear[1]):int(N/2+2-smear[1])] > 0)
+            a = indices[0] + int(N/2 - 1-smear[0])
+            b = indices[1] + int(N/2 - 1-smear[1])
+            crops_labels[j][a, b] = 2
+        else:
+            indices = np.where(crops[j, int(N/2-1-smear[0]):int(N/2+2-smear[0]), int(N/2-1-smear[1]):int(N/2+2-smear[1]), int(N/2-1-smear[2]):int(N/2+2-smear[2])] > 0)
+            a = indices[0] + int(N/2 - 1-smear[0])
+            b = indices[1] + int(N/2 - 1-smear[1])
+            c = indices[2] + int(N/2 - 1-smear[2])
+            crops_labels[j][a, b, c] = 2
+    return crops, crops_labels
+
 def filter_points(im_proposals, im_scores, eps):
     db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
     keep = {}

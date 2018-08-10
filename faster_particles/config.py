@@ -18,6 +18,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 class PPNConfig(object):
     IMAGE_SIZE = 768 # 512
     CROP_SIZE = 24
+    SLICE_SIZE = 64
+    ENABLE_CROP = False
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
@@ -141,6 +143,10 @@ class PPNConfig(object):
         parser.add_argument("-ms", "--min-score", default=self.MIN_SCORE, type=float, help="Minimum score above which PPN predictions should be kept")
         parser.add_argument("-d", "--display-dir", action='store', type=str, required=True, help="Path to display directory.")
         parser.add_argument("-ni", "--next-index", default=self.NEXT_INDEX, type=int, help="Index from which to start reading LArCV data file.")
+        parser.add_argument("-ec", "--enable-crop", default=self.ENABLE_CROP, action='store_true', help="Crop original data to smaller windows.")
+        parser.add_argument("-ss", "--slice-size", action='store', default=self.SLICE_SIZE, type=int, help="Width (and height) of cropped slice from image.")
+        parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
+
 
     def parse_args(self):
         args = self.parser.parse_args()

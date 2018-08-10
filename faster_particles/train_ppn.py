@@ -16,7 +16,7 @@ from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
 from faster_particles.demo_ppn import get_filelist, load_weights
 from faster_particles.display_utils import display, display_uresnet, display_ppn_uresnet
 from faster_particles.base_net import basenets
-
+from faster_particles.cropping import *
 
 class Trainer(object):
     def __init__(self, net, train_toydata, test_toydata, cfg, display_util=None):
@@ -63,6 +63,8 @@ class Trainer(object):
         saver = tf.train.Saver()
 
         step = 0
+        crop_algorithm = Probabilistic(self.cfg)
+        dim = 3 if self.cfg.DATA_3D else 2
         print("Start training...")
         while step < self.cfg.MAX_STEPS+1:
             step += 1
@@ -76,36 +78,45 @@ class Trainer(object):
             if step%100 == 0:
                 print("Step %d" % step)
 
-            if self.cfg.NET == 'small_uresnet':
-                blob['data'] = np.reshape(blob['crops'], (-1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE, 1))
-                blob['labels'] = np.reshape(blob['crops_labels'], (-1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE))
-                if is_testing:
-                    summary, result = self.test_net.test_image(sess, blob)
-                    summary_writer_test.add_summary(summary, step)
-                else:
-                    summary, result = self.train_net.train_step_with_summary(sess, blob)
-                    summary_writer_train.add_summary(summary, step)
-                for i in range(len(blob['crops'])):
-                    blob_i = {'data': np.reshape(blob['crops'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE, 1)), 'labels': np.reshape(blob['crops_labels'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE))}
-                    #print(result)
-                    #print(blob_i['labels'])
-                    if is_drawing and self.display is not None:
-                        N = self.cfg.IMAGE_SIZE
-                        self.cfg.IMAGE_SIZE = self.cfg.CROP_SIZE
-                        self.display(blob_i, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), vmin=0, vmax=1, predictions=np.reshape(result['predictions'][i], (1, self.cfg.CROP_SIZE, self.cfg.CROP_SIZE)))
-                        self.cfg.IMAGE_SIZE = N
+            # Cropping pre-processing
+            if self.cfg.ENABLE_CROP: # FIXME blob['crops'] and blob['crops_labels'] for small uresnet
+                batch_blobs = crop_algorithm.process(blob)
             else:
-                if is_testing:
-                    summary, result = self.test_net.test_image(sess, blob)
-                    summary_writer_test.add_summary(summary, step)
+                batch_blobs = [blob]
+            for blob in batch_blobs:
+
+                if self.cfg.NET == 'small_uresnet':
+                    blob['data'] = np.reshape(blob['crops'], (-1,) + (self.cfg.CROP_SIZE,) * dim + (1,))
+                    blob['labels'] = np.reshape(blob['crops_labels'], (-1,) + (self.cfg.CROP_SIZE,) * dim)
+                    if is_testing:
+                        summary, result = self.test_net.test_image(sess, blob)
+                        summary_writer_test.add_summary(summary, step)
+                    else:
+                        summary, result = self.train_net.train_step_with_summary(sess, blob)
+                        summary_writer_train.add_summary(summary, step)
+                    for i in range(len(blob['crops'])):
+                        blob_i = {'data': np.reshape(blob['crops'][i], (1,) + (self.cfg.CROP_SIZE,) * dim + (1,)), 'labels': np.reshape(blob['crops_labels'][i], (1,) + (self.cfg.CROP_SIZE,) * dim)}
+                        #print(result)
+                        #print(blob_i['labels'])
+                        if is_drawing and self.display is not None:
+                            N = self.cfg.IMAGE_SIZE
+                            self.cfg.IMAGE_SIZE = self.cfg.CROP_SIZE
+                            self.display(blob_i, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), vmin=0, vmax=1, predictions=np.reshape(result['predictions'][i], (1,) + (self.cfg.CROP_SIZE,) * dim))
+                            self.cfg.IMAGE_SIZE = N
                 else:
-                    summary, result = self.train_net.train_step_with_summary(sess, blob)
-                    summary_writer_train.add_summary(summary, step)
-                if is_drawing and self.display is not None:
-                    if self.cfg.NET == 'ppn':
-                        result['dim1'] = self.train_net.dim1
-                        result['dim2'] = self.train_net.dim2
-                    self.display(blob, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), **result)
+                    # FIXME change crop function to take channels into account
+                    blob['data'] = blob['data'][..., np.newaxis]
+                    if is_testing:
+                        summary, result = self.test_net.test_image(sess, blob)
+                        summary_writer_test.add_summary(summary, step)
+                    else:
+                        summary, result = self.train_net.train_step_with_summary(sess, blob)
+                        summary_writer_train.add_summary(summary, step)
+                    if is_drawing and self.display is not None:
+                        if self.cfg.NET == 'ppn':
+                            result['dim1'] = self.train_net.dim1
+                            result['dim2'] = self.train_net.dim2
+                        self.display(blob, self.cfg, index=step, name='display_train', directory=os.path.join(self.cfg.DISPLAY_DIR, 'train'), **result)
 
             if step%1000 == 0:
                 save_path = saver.save(sess, os.path.join(self.outputdir, "model-%d.ckpt" % step))

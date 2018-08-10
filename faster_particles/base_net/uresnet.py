@@ -30,12 +30,12 @@ class UResNet(BaseNet):
         return { self.image_placeholder: blob['data'], self.pixel_labels_placeholder: blob['labels'], self.learning_rate_placeholder: self.learning_rate }
 
     def test_image(self, sess, blob):
-        predictions, summary = sess.run([self._predictions, self.summary_op], feed_dict=self.feed_dict(blob))
-        return summary, {'predictions': predictions}
+        predictions, scores, summary = sess.run([self._predictions, self._scores, self.summary_op], feed_dict=self.feed_dict(blob))
+        return summary, {'predictions': predictions, 'scores': scores}
 
     def train_step_with_summary(self, sess, blobs):
-        _, summary, predictions = sess.run([self.train_op, self.summary_op, self._predictions], feed_dict=self.feed_dict(blobs))
-        return summary, {'predictions': predictions}
+        _, summary, scores, predictions = sess.run([self.train_op, self.summary_op, self._scores, self._predictions], feed_dict=self.feed_dict(blobs))
+        return summary, {'predictions': predictions, 'scores': scores}
 
     def resnet_module(self, input_tensor, num_outputs, trainable=True, kernel=(3,3), stride=1, scope='noscope'):
         num_inputs  = input_tensor.get_shape()[-1].value
@@ -180,12 +180,16 @@ class UResNet(BaseNet):
                               activation_fn = None,
                               scope = 'conv2')
 
-                self._softmax = tf.nn.softmax(logits=net)
-                self._predictions = tf.argmax(self._softmax, axis=-1)
+                self._softmax = tf.nn.softmax(logits=net, name="softmax")
+                self._scores = tf.reduce_max(self._softmax, axis=-1, name="scores")
+                self._predictions = tf.argmax(self._softmax, axis=-1, name="predictions")
 
                 # Define loss
                 dims = self.image_placeholder.get_shape()[1:]
 
+                self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.pixel_labels_placeholder, logits=net)
+                self._loss = tf.reduce_mean(tf.reduce_sum(tf.reshape(self._loss, [-1, int(np.prod(dims) / dims[-1])]), axis=1), name="loss")
+                tf.summary.scalar('loss', self._loss)
                 if is_training:
                     with tf.variable_scope('metrics'):
                         labels = tf.argmax(net, axis=len(dims), output_type=tf.int32)
@@ -196,9 +200,6 @@ class UResNet(BaseNet):
                         self.accuracy_nonzero = tf.reduce_mean(tf.cast(tf.equal(nonzero_label, nonzero_pred), tf.float32))
                         tf.summary.scalar('accuracy_all', self.accuracy_allpix)
                         tf.summary.scalar('accuracy_nonzero', self.accuracy_nonzero)
-                    self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.pixel_labels_placeholder, logits=net)
-                    self._loss = tf.reduce_mean(tf.reduce_sum(tf.reshape(self._loss, [-1, int(np.prod(dims) / dims[-1])]), axis=1))
-                    tf.summary.scalar('loss', self._loss)
 
                     self.train_op = tf.train.AdamOptimizer(self.learning_rate_placeholder).minimize(self._loss)
 
