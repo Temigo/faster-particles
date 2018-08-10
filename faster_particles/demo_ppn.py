@@ -110,14 +110,14 @@ def inference_full(cfg):
         #results = {**inference_base[i], **inference_ppn[i]}
         results = inference_base[i].copy()
         results.update(inference_ppn[i])
-        im_proposals_filtered = display_ppn_uresnet(
+        display_ppn_uresnet(
             blobs[i],
             cfg,
             index=i,
             directory=os.path.join(cfg.DISPLAY_DIR, 'demo_full'),
             **results
         )
-        metrics.add(blobs[i], results, im_proposals_filtered)
+        metrics.add(blobs[i], results)
     metrics.plot()
     print("Done.")
     # Clustering: k-means? DBSCAN?
@@ -251,7 +251,7 @@ def inference(cfg):
             end = time.time()
             duration += end - start
             if is_ppn:
-                im_proposals_filtered = display(
+                display(
                     blob,
                     cfg,
                     index=i,
@@ -260,7 +260,7 @@ def inference(cfg):
                     directory=os.path.join(cfg.DISPLAY_DIR, 'demo'),
                     **results
                 )
-                metrics.add(blob, results, im_proposals_filtered)
+                metrics.add(blob, results)
             else:
                 if cfg.BASE_NET == 'uresnet':
                     display_uresnet(blob, cfg, index=i, **results)
