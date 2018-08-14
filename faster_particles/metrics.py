@@ -51,8 +51,8 @@ class PPNMetrics(object):
         im_proposals = results['im_proposals']
         
         distances_ppn2 = scipy.spatial.distance.cdist(im_proposals, gt_pixels)
-        self.ppn2_distances_to_closest_gt.extend(np.amin(distances_ppn2, axis=0))
-        self.ppn2_distances_to_closest_pred.extend(np.amin(distances_ppn2, axis=1))
+        self.ppn2_distances_to_closest_gt.extend(np.amin(distances_ppn2, axis=1))
+        self.ppn2_distances_to_closest_pred.extend(np.amin(distances_ppn2, axis=0))
         
         self.ppn2_ambiguity.extend(np.count_nonzero(distances_ppn2 < self.threshold_ambiguity, axis=1))
         self.ppn2_false_positives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_positive, axis=1)) / im_proposals.shape[0])
