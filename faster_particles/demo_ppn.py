@@ -52,7 +52,7 @@ def get_filelist(ls_command):
     print(str(filelist))
     return str(filelist).replace('\'', '\"').replace(" ", "")
 
-def get_data(cfg):
+def get_data(cfg, channel):
     if cfg.TOYDATA:
         if cfg.NET == 'ppn':
             data = ToydataGenerator(cfg)
@@ -60,7 +60,7 @@ def get_data(cfg):
             data = ToydataGenerator(cfg, classification=True)
     else:
         filelist = get_filelist(cfg.DATA)
-        data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
+        data = LarcvGenerator(cfg, channel, ioname="inference"+str(channel), filelist=filelist)
     return data
 
 def inference_simple(cfg, blobs, net, num_test=10):
@@ -222,7 +222,11 @@ def inference_ppn_ext(cfg):
             cfg.IMAGE_SIZE = N
 
 def inference(cfg):
-    data = get_data(cfg)
+    #data1 = get_data(cfg, 1)
+    #cfg.DISPLAY_DIR = 'display/demo_' + str(cfg.PPN1_SCORE_THRESHOLD)
+    data1 = get_data(cfg, 2)
+    cfg.DISPLAY_DIR = 'display/demo_' + str(cfg.PPN1_SCORE_THRESHOLD) + '_channel'
+
     is_ppn = cfg.NET == 'ppn'
     if is_ppn:
         net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
@@ -245,31 +249,33 @@ def inference(cfg):
 
         for i in range(cfg.MAX_STEPS):
             print("%d/%d" % (i, cfg.MAX_STEPS))
-            blob = data.forward()
+            blob1 = data1.forward()
             start = time.time()
-            summary, results = net.test_image(sess, blob)
+            summary1, results1 = net.test_image(sess, blob1)
             end = time.time()
             duration += end - start
             if is_ppn:
                 display(
-                    blob,
+                    blob1,
                     cfg,
                     index=i,
                     dim1=net.dim1,
                     dim2=net.dim2,
                     directory=os.path.join(cfg.DISPLAY_DIR, 'demo'),
-                    **results
+                    **results1
                 )
-                metrics.add(blob, results)
+                
+                metrics.add(blob1, results1)
             else:
                 if cfg.BASE_NET == 'uresnet':
-                    display_uresnet(blob, cfg, index=i, **results)
+                    display_uresnet(blob1, cfg, index=i, **results)
                 else:
-                    print(blob, results)
+                    print(blob1, results)
     duration /= cfg.MAX_STEPS
     print("Average duration of inference = %f ms" % duration)
     if is_ppn:
         metrics.plot()
+
 
 if __name__ == '__main__':
     #inference(cfg)

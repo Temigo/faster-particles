@@ -20,7 +20,7 @@ import tempfile
 class LarcvGenerator(object):
     CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
-    def __init__(self, cfg, ioname="ThreadProcessor", filelist=""):
+    def __init__(self, cfg, channel, ioname="ThreadProcessor", filelist=""):
         self.N = cfg.IMAGE_SIZE # shape of canvas
         self.cfg = cfg
         self.batch_size = cfg.BATCH_SIZE
@@ -51,7 +51,7 @@ class LarcvGenerator(object):
                 config_file = 'ppn_uresnet_2d.cfg'
             else:
                 replace = 6
-                config_file = 'ppn_2d.cfg'
+                config_file = 'ppn_2d_channel' + str(channel) + '.cfg'
         io_config = open(os.path.join(os.path.dirname(__file__), config_file)).read() % ((ioname, cfg.SEED, filelist) + (ioname,)*replace)
         # FIXME raises KeyError
         #io_config = io_config.format(ioname)

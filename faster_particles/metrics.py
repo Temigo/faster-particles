@@ -11,6 +11,11 @@ from faster_particles.display_utils import display_original_image, display_im_pr
 
 class PPNMetrics(object):
     def __init__(self, cfg, dim1=8, dim2=4):
+        self.labels = []
+        self.scores = []
+        self.proposals = []
+        self.truth = []
+        
         self.im_labels = []
         self.im_scores = []
         self.im_proposals = []
@@ -40,6 +45,11 @@ class PPNMetrics(object):
         self.threshold_outliers = 15
 
     def add(self, blob, results):
+        self.labels.append(results['im_labels'])
+        self.scores.append(results['im_scores'])
+        self.proposals.append(results['im_proposals'])
+        self.truth.append(blob['gt_pixels'][:, :-1])
+        
         self.im_labels.extend(results['im_labels'])
         self.im_scores.extend(results['im_scores'])
         self.im_proposals.extend(results['im_proposals'])
@@ -61,17 +71,19 @@ class PPNMetrics(object):
 
         #if np.logical_and(distances_ppn2 > 5, distances_ppn2 < 6).any():
         #    print(im_proposals_filtered, distances_ppn2)
-        if np.logical_and(np.amin(distances_ppn2, axis=1) > 5, np.amin(distances_ppn2, axis=1) < 10).any():
-            print(im_proposals, np.amin(distances_ppn2, axis=1))
-            # --- FIGURE 2 : PPN2 predictions ---
-            fig2 = plt.figure()
-            ax2 = fig2.add_subplot(111, aspect='equal', projection='3d')
-            display_original_image(blob, self.cfg, ax2, vmin=0, vmax=400, cmap='jet')
-            im_proposals = display_im_proposals(self.cfg, ax2, im_proposals, results['im_scores'], results['im_labels'])
-            ax2.set_xlim(0, self.cfg.IMAGE_SIZE)
-            ax2.set_ylim(0, self.cfg.IMAGE_SIZE)
-            ax2.set_zlim(0, self.cfg.IMAGE_SIZE)
-            plt.show()
+        
+        #not sure what this does       
+#         if np.logical_and(np.amin(distances_ppn2, axis=1) > 5, np.amin(distances_ppn2, axis=1) < 10).any():
+#             print(im_proposals, np.amin(distances_ppn2, axis=1))
+#             # --- FIGURE 2 : PPN2 predictions ---
+#             fig2 = plt.figure()
+#             ax2 = fig2.add_subplot(111, aspect='equal', projection='3d')
+#             display_original_image(blob, self.cfg, ax2, vmin=0, vmax=400, cmap='jet')
+#             im_proposals = display_im_proposals(self.cfg, ax2, im_proposals, results['im_scores'], results['im_labels'])
+#             ax2.set_xlim(0, self.cfg.IMAGE_SIZE)
+#             ax2.set_ylim(0, self.cfg.IMAGE_SIZE)
+#             ax2.set_zlim(0, self.cfg.IMAGE_SIZE)
+#             plt.show()
 
         rois = results['rois']
         if self.cfg.DATA_3D:
@@ -100,6 +112,10 @@ class PPNMetrics(object):
         np.savetxt(os.path.join(self.dir, "ppn2_distances_to_closest_pred.csv"), self.ppn2_distances_to_closest_pred, delimiter=",")
         np.savetxt(os.path.join(self.dir, "ppn2_false_positives.csv"), self.ppn2_false_positives, delimiter=",")
         np.savetxt(os.path.join(self.dir, "ppn2_false_negatives.csv"), self.ppn2_false_negatives, delimiter=",")
+        np.save(os.path.join(self.dir, "ppn2_labels.npy"), self.labels)
+        np.save(os.path.join(self.dir, "ppn2_scores.npy"), self.scores)
+        np.save(os.path.join(self.dir, "ppn2_proposals.npy"), self.proposals)
+        np.save(os.path.join(self.dir, "ppn2_truth.npy"), self.truth)
         #self.ppn2_scores()
         self.plot_distances_to_closest_gt()
         self.plot_distances_to_closest_pred()

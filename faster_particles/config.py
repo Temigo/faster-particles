@@ -3,7 +3,7 @@ import os
 import numpy as np
 import tensorflow as tf
 
-
+from reproduce import inference_k
 from demo_ppn import inference, inference_full, inference_ppn_ext
 from train_ppn import train_ppn, train_classification, train_small_uresnet
 
@@ -23,8 +23,8 @@ class PPNConfig(object):
     DISPLAY_DIR = "display"
     NUM_CLASSES = 3
     R = 20
-    PPN1_SCORE_THRESHOLD = 0.6
-    PPN2_DISTANCE_THRESHOLD = 5
+    PPN1_SCORE_THRESHOLD = 0.6 # lower to accept more positives, originally 0.6
+    PPN2_DISTANCE_THRESHOLD = 5 # raise to accept more positives, originally 5
     LEARNING_RATE = 0.001
     LAMBDA_PPN = 0.5
     LAMBDA_PPN1 = 0.5
@@ -76,7 +76,7 @@ class PPNConfig(object):
     SHOWER_OUT_PNG = False
 
     # Environment variables
-    CUDA_VISIBLE_DEVICES = '0,1,2,3'
+    CUDA_VISIBLE_DEVICES = '3'
 
     def __init__(self):
         self.create_parsers()
