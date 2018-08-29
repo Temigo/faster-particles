@@ -13,7 +13,8 @@ import sys, os
 
 from faster_particles.ppn_utils import include_gt_pixels, compute_positives_ppn2, \
     compute_positives_ppn1, assign_gt_pixels, generate_anchors, \
-    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer, nms, filter_points
+    predicted_pixels, top_R_pixels, slice_rois, crop_pool_layer
+from faster_particles.ppn_postprocessing import filter_points, nms
 from faster_particles.base_net.vgg import VGG
 
 class PPN(object):
@@ -42,19 +43,14 @@ class PPN(object):
 
     def test_image(self, sess, blob):
         feed_dict = { self.image_placeholder: blob['data'], self.gt_pixels_placeholder: blob['gt_pixels'] }
-        im_proposals, im_labels, im_scores, rois, scores2, loss, x, summary = sess.run([
+        im_proposals, im_labels, im_scores, rois, x, summary = sess.run([
             self._predictions['im_proposals'],
             self._predictions['im_labels'],
             self._predictions['im_scores'],
             self._predictions['rois'],
-            self._predictions['ppn2_scores'],
-            self._losses['total_loss'],
             self.x,
             self.summary_op
             ], feed_dict=feed_dict)
-        #print("loss: ", loss)
-        #print("x: ", x.shape, x)
-        #print("rois: ", rois)
         return summary, {'im_proposals': im_proposals,
                         'im_labels': im_labels,
                         'im_scores': im_scores,
@@ -62,14 +58,11 @@ class PPN(object):
 
     def train_step_with_summary(self, sess, blobs):
         feed_dict = { self.image_placeholder: blobs['data'], self.gt_pixels_placeholder: blobs['gt_pixels'] }
-        _, ppn1_proposals, labels_ppn1, rois, ppn2_proposals, ppn2_positives, \
+        _, ppn1_closest_gt_distance, rois, \
         im_labels, im_scores, im_proposals, loss, x, summary = sess.run([
                             self.train_op,
-                            self._predictions['ppn1_proposals'],
-                            self._predictions['labels_ppn1'],
+                            self._predictions['ppn1_closest_gt_distance'],
                             self._predictions['rois'],
-                            self._predictions['ppn2_proposals'],
-                            self._predictions['ppn2_positives'],
                             self._predictions['im_labels'],
                             self._predictions['im_scores'],
                             self._predictions['im_proposals'],
@@ -77,9 +70,13 @@ class PPN(object):
                             self.x,
                             self.summary_op
                             ], feed_dict=feed_dict)
-        #print("loss: ", loss)
-        #print("x: ", x.shape, x)
-        #print("rois: ", rois)
+        if np.isnan(loss):
+            print("loss: ", loss)
+            print("gt_pixels: ", blobs['gt_pixels'])
+            print("im_proposals: ", im_proposals)
+            print("im_scores: ", im_scores)
+            print("ppn1_closest_gt_distance: ",  )
+
         return summary, {'rois': rois,
                         'im_labels': im_labels,
                         'im_proposals': im_proposals,
@@ -164,31 +161,29 @@ class PPN(object):
                 # Turn predicted positions (float) into original image positions
                 # Convert proposals2 ROI 1x1 coordinates to 64x64 F3 coordinates
                 # then back to original image.
-                # FIXME take top scores only? or leave it to the demo script
                 with tf.variable_scope("final_proposals"):
                     im_proposals = tf.identity((proposals2 + self.dim2*rois)*self.dim1, name="im_proposals_raw")
                     im_labels = tf.argmax(scores2, axis=1, name="im_labels_raw")
-                    #im_scores = tf.gather_nd(scores2, tf.concat([tf.reshape(tf.range(0, tf.shape(im_labels)[0]), (-1, 1)), tf.cast(tf.reshape(im_labels, (-1, 1)), tf.int32)], axis=1), name="im_scores_raw")
-                    #im_scores = scores2[:, 0] + scores2[:, 1]
                     im_scores = tf.reshape(scores2, (-1,))
-                    #im_scores = scores2
-                    print(im_scores)
                     # We have now num_roi proposals and corresponding labels in original image.
+
+                    # Select proposals above a minimum score.
                     keep = tf.where(im_scores > self.cfg.MIN_SCORE, name="keep_good_scores")[:, 0]
-                    print(keep)
                     keep = tf.reshape(keep, (-1, 1))
                     im_proposals = tf.gather_nd(im_proposals, keep, name="im_proposals")
                     #im_labels = tf.gather_nd(im_labels, keep, name="im_labels")
                     im_scores = tf.gather_nd(im_scores, keep, name="im_scores")
-                    print(im_proposals, im_scores)
-                    # Pixel NMS equivalent ?
-                    im_proposals, keep = nms(im_proposals, im_scores)
-                    im_proposals = tf.gather(im_proposals, keep)
-                    #im_labels = tf.gather(im_labels, keep)
-                    im_scores = tf.gather(im_scores, keep)
-                    # Use DBSCAN
-                    #im_proposals, im_scores, keep = tf.py_func(filter_points, [im_proposals, im_scores, 15.0 if self.cfg.DATA_3D else 20.0], [tf.float32, tf.float32, tf.int64])
-                    #im_labels = tf.gather(im_labels, keep)
+
+                    # Postprocessing of proposals
+                    if self.cfg.POSTPROCESSING == 'nms': # Pixel NMS equivalent
+                        im_proposals, keep = nms(im_proposals, im_scores)
+                        im_proposals = tf.gather(im_proposals, keep)
+                        #im_labels = tf.gather(im_labels, keep)
+                        im_scores = tf.gather(im_scores, keep)
+                    else: # Use DBSCAN
+                        im_proposals, im_scores, keep = tf.py_func(filter_points, [im_proposals, im_scores, 15.0 if self.cfg.DATA_3D else 20.0], [tf.float32, tf.float32, tf.int64])
+                        im_labels = tf.gather(im_labels, keep)
+
                     self._predictions['im_proposals'] = im_proposals
                     self._predictions['im_labels'] = im_labels
                     self._predictions['im_scores'] = im_scores
@@ -204,10 +199,6 @@ class PPN(object):
                     self._losses['distance_final_point'] = tf.reduce_mean(tf.reduce_mean(closest_distance), name="distance_final_point")
 
                 # FIXME How to combine losses
-                #total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
-                #            + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
-                #            + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \
-                #            + (1.0 - self.lambda_ppn2) * self._losses['loss_ppn2_class']), name="total_loss")
                 total_loss = tf.identity(self.lambda_ppn * (self.lambda_ppn1 * self._losses['loss_ppn1_point'] \
                             + (1.0 - self.lambda_ppn1) * self._losses['loss_ppn1_class']) \
                             + (1.0 - self.lambda_ppn) * (self.lambda_ppn2 * self._losses['loss_ppn2_point'] \

@@ -9,7 +9,6 @@ def crop(patch_centers, N, data):
     coords0 = np.floor(patch_centers - N/2.0).astype(int) # bottom left corner
     coords1 = np.floor(patch_centers + N/2.0).astype(int) # top right corner
     dim = len(data.shape) - 2
-    print("dim: ", dim, "patch_centers: ", patch_centers.shape, 'data: ', data.shape)
     smear = np.random.randint(-N/2+1, high=N/2, size=dim)
     image_size = data.shape[1]
     coords0 = np.clip(coords0 + smear, 0, image_size-1)
@@ -43,79 +42,6 @@ def crop(patch_centers, N, data):
             c = indices[2] + int(N/2 - 1-smear[2])
             crops_labels[j][a, b, c] = 2
     return crops, crops_labels
-
-def filter_points(im_proposals, im_scores, eps):
-    db = DBSCAN(eps=eps, min_samples=1).fit_predict(im_proposals)
-    keep = {}
-    index = {}
-    new_proposals = []
-    new_scores = []
-    clusters, index = np.unique(db, return_index=True)
-    for i in clusters:
-        indices = np.where(db == i)
-        new_proposals.append(np.average(im_proposals[indices], axis=0)) # weights=im_scores[indices]
-        new_scores.append(np.average(im_scores[indices], axis=0))
-    """for i in range(len(db)):
-        cluster = db[i]
-        if cluster not in keep.keys() or im_scores[i] > keep[cluster]:
-            keep[cluster] = im_scores[i]
-            index[cluster] = i
-    new_proposals = []
-    for cluster in keep:
-        new_proposals.append(im_proposals[index[cluster]])"""
-    return np.array(new_proposals), np.array(new_scores), index
-
-def nms_step(order, areas, proposals, new_proposals, keep, threshold, size, *args):
-    i = order[0]
-    keep = tf.concat([keep, [i]], axis=0)
-    dim = len(args)/2
-    inter = tf.ones((tf.shape(order)[0]-1,)) # area/volume of intersection
-    proposals_inside = proposals
-    for d in range(dim):
-        xx1 = tf.maximum(args[d][i], tf.gather(args[d], order[1:]))
-        xx2 = tf.minimum(args[dim+d][i], tf.gather(args[dim+d], order[1:]))
-        inter = inter * tf.maximum(0.0, xx2 - xx1 + 1)
-        indices_inside = tf.where(tf.logical_and(proposals_inside[:, d] >= args[d][i], proposals_inside[:, d] <= args[dim+d][i]))
-        proposals_inside = tf.gather_nd(proposals_inside, indices_inside)
-
-    # Compute IoU
-    ovr = inter / (tf.gather(areas, i) + tf.gather(areas, order[1:]) - inter)
-    indices = tf.where(ovr <= threshold)
-    new_order = tf.gather(order, indices + 1)[:, 0]
-    current_coord = tf.reduce_mean(proposals_inside, axis=0)
-    #current_coord = proposals[i]
-    new_proposals = tf.concat([new_proposals[:i], [current_coord], new_proposals[i+1:]], axis=0)
-    return (new_order, areas, proposals, new_proposals, keep, threshold, size) + args
-
-def nms(im_proposals, im_scores, threshold=0.01, size=6.0):
-    """
-    Performs NMS (non maximal suppression) on proposed pixels.
-    - Look at pixels in order of decreasing score
-    - Consider squares of size `size` centered at each pixels
-    - If the IoU is bigger than a threshold don't keep the point
-    """
-    size = size
-    areas = tf.ones((tf.shape(im_proposals)[0],))
-    coords = ()
-    dim = im_proposals.get_shape()[-1]
-    for d in range(dim):
-        coords = coords + (im_proposals[:, d] - size,)
-    for d in range(dim):
-        coords = coords + (im_proposals[:, d] + size,)
-    for d in range(dim):
-        areas = areas * (coords[dim+d] - coords[d] + 1.0)
-    coords_shape = ()
-    for c in coords:
-        coords_shape = coords_shape + (c.get_shape(),)
-    _, order = tf.nn.top_k(im_scores, k=tf.shape(im_scores)[0])
-    keep = tf.Variable([0], dtype=tf.int32)
-    threshold = tf.constant(threshold)
-    size = tf.constant(size)
-    #new_proposals = tf.Variable(im_proposals, validate_shape=False)
-    while_return = tf.while_loop(lambda order, *args: tf.shape(order)[0] > 0, nms_step, [order, areas, im_proposals, im_proposals, keep, threshold, size] + list(coords), shape_invariants=[order.get_shape(), areas.get_shape(), im_proposals.get_shape(), im_proposals.get_shape(), tf.TensorShape((None,)), threshold.get_shape(), size.get_shape()] + list(coords_shape))
-    keep = while_return[4][1:]
-    new_proposals = while_return[3]
-    return new_proposals, keep
 
 def generate_anchors(im_shape, repeat=1):
     """
@@ -186,8 +112,9 @@ def predicted_pixels(rpn_cls_prob, rpn_bbox_pred, anchors, im_shape):
     with tf.variable_scope("predicted_pixels"):
         # Select pixels that contain something
         scores = rpn_cls_prob[..., 1:]
+        # Reshape to (None*N*N, n)
         scores = tf.reshape(scores, (-1, scores.get_shape().as_list()[-1]))
-         # has shape (None, N, N, num_classes - 1)
+        # has shape (None, N, N, num_classes - 1)
         dim = anchors.get_shape().as_list()[-1]
         N = rpn_cls_prob.get_shape().as_list()[1]
         # Get proposal pixels from regression deltas of rpn_bbox_pred
@@ -328,12 +255,12 @@ def assign_gt_pixels(gt_pixels_placeholder, proposals, dim1, dim2, rois=None):
         # closest_gt.shape = [A*N*N,]
         # closest_gt[i] = indice of closest gt in gt_pixels_placeholder
         closest_gt = tf.argmin(distances, axis=1)
-        closest_gt_distance = tf.reduce_min(distances, axis=1, keep_dims=True, name="closest_gt_distance")
+        closest_gt_distance = tf.reduce_min(distances, axis=1, keepdims=True, name="closest_gt_distance")
         #print("squeezed gt_pixels_placeholder shape=", tf.squeeze(tf.slice(gt_pixels_placeholder, [0,0,0], [-1,1,-1]), axis=1).shape)
         #closest_gt_label = tf.nn.embedding_lookup(tf.slice(gt_pixels_placeholder, [0, 2], [-1, 1]), closest_gt)
         gt_pixels_labels = tf.slice(gt_pixels_placeholder, [0, dim], [-1, 1])
-        closest_gt_label = tf.gather_nd(gt_pixels_labels, tf.concat([tf.reshape(tf.range(0, tf.shape(closest_gt_distance)[0]), (-1,1)), tf.cast(tf.reshape(closest_gt, (-1, 1)), tf.int32)], axis=1), name="closest_gt_label")
-        return closest_gt, closest_gt_distance, tf.reshape(closest_gt_label, (-1, 1))
+        closest_gt_label = tf.reshape(tf.gather_nd(gt_pixels_labels, tf.concat([tf.reshape(tf.range(0, tf.shape(closest_gt_distance)[0]), (-1,1)), tf.cast(tf.reshape(closest_gt, (-1, 1)), tf.int32)], axis=1)), (-1, 1), name="closest_gt_label")
+        return closest_gt, closest_gt_distance, closest_gt_label
 
 def crop_pool_layer(net, rois, dim2, dim):
     """

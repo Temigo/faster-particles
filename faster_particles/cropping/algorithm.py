@@ -8,6 +8,7 @@ class CroppingAlgorithm(object):
     Base class for any cropping algorithm, they should inherit from it
     and implement appropriate methods (see below)
     """
+    
     def __init__(self, cfg):
         #super(CroppingAlgorithm, self).__init__()
         self.cfg = cfg
@@ -23,24 +24,27 @@ class CroppingAlgorithm(object):
         pass
 
     def process(self, original_blob):
-        print(original_blob)
         patch_centers, patch_sizes = self.crop(original_blob['voxels'])
-        print(patch_centers, patch_sizes)
-        # TODO Need to crop all the fields of blob including gt pixels
         batch_blobs = []
-        dim = 3 if self.cfg.DATA_3D else 2 # FIXME below for 3D
+        dim = 3 if self.cfg.DATA_3D else 2
         for i in range(len(patch_centers)):
             patch_center, patch_size = patch_centers[i], patch_sizes[i]
+            # Flip patch_center coordinates because gt_pixels coordinates are reversed
+            patch_center = np.flipud(patch_center)
             blob = {}
-            print(patch_center, patch_size)
-            print(patch_center[0]-patch_size/2)
-            #blob['data'] = original_blob['data'][0, int(patch_center[0]-patch_size/2):int(patch_center[0]+patch_size/2+1), (patch_center[1]-patch_size/2):(patch_center[1]+patch_size/2+1), 0]
-            #blob['data'] = np.reshape(blob['data'], (1,)+ (self.cfg.SLICE_SIZE,) * dim + (1,))
             blob['data'], _ = crop_util(np.array([patch_center]), self.cfg.SLICE_SIZE, original_blob['data'])
-            #blob['label'] = original_blob['label'][0, (patch_center[0]-patch_size[0]/2):(patch_center[0]+patch_size[0]/2+1), (patch_center[1]-patch_size[1]/2):(patch_center[1]+patch_size[1]/2+1)]
-            #blob['label'] = np.reshape(blob['label'], (1,)+ (self.cfg.SLICE_SIZE,) * dim)
-            indices = np.where(np.all(np.logical_and(original_blob['gt_pixels'][:, :-1] > patch_center - patch_size, original_blob['gt_pixels'][:, :-1] < patch_center + patch_size), axis=1))
+            indices = np.where(np.all(np.logical_and(original_blob['gt_pixels'][:, :-1] >= patch_center - patch_size/2.0, original_blob['gt_pixels'][:, :-1] <= patch_center + patch_size/2.0), axis=1))
             blob['gt_pixels'] = original_blob['gt_pixels'][indices]
-            batch_blobs.append(blob)
+            blob['gt_pixels'][:, :-1] = blob['gt_pixels'][:, :-1]  - (patch_center - patch_size / 2.0) - 1
+
+            # Select voxels
+            patch_center = np.flipud(patch_center) # Flip patch_center coordinates back to normal
+            voxels = original_blob['voxels']
+            blob['voxels'] = voxels[np.all(np.logical_and(voxels >= patch_center - patch_size / 2.0, voxels <= patch_center + patch_size / 2.0), axis=1)]
+            blob['voxels'] = blob['voxels'] - (patch_center - patch_size / 2.0) - 1
+            blob['entries'] = original_blob['entries']
+            # FIXME FIXME FIXME
+            if len(blob['gt_pixels']) > 0: # Make sure there is at least one ground truth pixel in the patch (for training)
+                batch_blobs.append(blob)
 
         return batch_blobs

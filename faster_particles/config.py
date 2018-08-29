@@ -20,10 +20,12 @@ class PPNConfig(object):
     CROP_SIZE = 24
     SLICE_SIZE = 64
     ENABLE_CROP = False
+
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
-    NUM_CLASSES = 3
+
+    NUM_CLASSES = 3 # For base network only
     R = 20
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
@@ -41,6 +43,7 @@ class PPNConfig(object):
     MAX_STEPS = 100
     WEIGHT_LOSS = False # FIXME make it False by default
     MIN_SCORE=0.0
+    POSTPROCESSING = 'nms' # Postprocessing: use either NMS or DBSCAN
 
     # Data configuration
     BATCH_SIZE = 1
@@ -146,7 +149,7 @@ class PPNConfig(object):
         parser.add_argument("-ec", "--enable-crop", default=self.ENABLE_CROP, action='store_true', help="Crop original data to smaller windows.")
         parser.add_argument("-ss", "--slice-size", action='store', default=self.SLICE_SIZE, type=int, help="Width (and height) of cropped slice from image.")
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
-
+        parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
 
     def parse_args(self):
         args = self.parser.parse_args()

@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
-from faster_particles.ppn_utils import filter_points
 
 def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
     vertices = [
@@ -64,14 +63,6 @@ def extract_voxels(data):
 
 def display_im_proposals(cfg, ax, im_proposals, im_scores, im_labels):
     if im_proposals is not None and im_scores is not None:
-        print(im_proposals)
-        print(im_scores)
-        """if len(im_proposals) > 0:
-            eps = 20.0 #9.0
-            if cfg.DATA_3D:
-                eps = 15.0 # FIXME
-            im_proposals = filter_points(im_proposals, im_scores, eps)"""
-
         for i in range(len(im_proposals)):
             proposal = im_proposals[i]
             #plt.text(proposal[1], proposal[0], str(im_scores[i][im_labels[i]]))
@@ -191,10 +182,10 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None, name='dis
 
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display', directory=''):
-    #print("gt_pixels: ", blob['gt_pixels'])
+    print("gt_pixels: ", blob['gt_pixels'])
     #print("rois : ", rois*dim1*dim2)
-    #print("im_proposals: ", im_proposals)
-    #print("im_scores: ", im_scores)
+    print("im_proposals: ", im_proposals)
+    print("im_scores: ", im_scores)
     #print(im_labels)
     if directory == '':
         directory = cfg.DISPLAY_DIR
