@@ -50,17 +50,7 @@ class PPNConfig(object):
     SEED = 123
     NEXT_INDEX = 0
     TOYDATA = False
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
-    # DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root" # For 2D
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00.root" # For 3D
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root" # For 3D
-    # DATA = "/data/drinkingkazu/dlprod_multipvtx_v05/mix/hit_mix00.root" # For UResNet 2D
-    #DATA = "/stage/drinkingkazu/u-resnet/vertex_data/out.root" # For UResNet 3D
-    # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
-    # DATA = ""
-    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
-    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
-    DATA = "/stage/drinkingkazu/fuckgrid/p*/larcv.root"
+    DATA = "/data/dlprod_ppn_v08_p01/test.root"
     DATA_3D = False
 
     # Track configuration
@@ -81,7 +71,7 @@ class PPNConfig(object):
     SHOWER_OUT_PNG = False
 
     # Environment variables
-    CUDA_VISIBLE_DEVICES = '0,1,2,3'
+    CUDA_VISIBLE_DEVICES = '0,1'
 
     def __init__(self):
         self.create_parsers()

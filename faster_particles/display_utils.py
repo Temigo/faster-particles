@@ -1,4 +1,3 @@
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -35,8 +34,7 @@ def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
     if cfg.DATA_3D:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
         colors = lambda i,j,k : matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap).to_rgba(blob['data'][0, i, j, k, 0])
-        for i in range(len(blob['voxels'])):
-            voxel = blob['voxels'][i]
+        for i, voxel in enumerate(blob['voxels']):
             if 'voxels_value' in blob:
                 if blob['voxels_value'][i] == 1: # track
                     draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='teal', alpha=1.0, linewidths=0.0, edgecolors='black')

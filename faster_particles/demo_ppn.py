@@ -32,7 +32,6 @@ def load_weights(cfg, sess):
         else: # load for full base network
             scopes.append((lambda x: cfg.BASE_NET in x, cfg.WEIGHTS_FILE_BASE))
 
-
     for scope, weights_file in scopes:
         print('Restoring %s...' % weights_file)
         variables_to_restore = [v for v in tf.global_variables() if scope(v.name)]
@@ -47,9 +46,10 @@ def load_weights(cfg, sess):
 # Returns a list of files as a string *without spaces*
 # e.g. "["file1.root","file2.root"]"
 def get_filelist(ls_command):
-    #filelist = subprocess.Popen(["ls %s" % ls_command], shell=True, stdout=subprocess.PIPE).stdout
     filelist = glob.glob(ls_command)
-    print(str(filelist))
+    for f in filelist:
+        if not os.path.isfile(f):
+            raise Exception("Datafile %s not found!" % f)
     return str(filelist).replace('\'', '\"').replace(" ", "")
 
 def get_data(cfg):

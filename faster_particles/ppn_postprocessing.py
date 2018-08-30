@@ -70,7 +70,6 @@ def nms(im_proposals, im_scores, threshold=0.01, size=6.0):
     keep = tf.Variable([0], dtype=tf.int32)
     threshold = tf.constant(threshold)
     size = tf.constant(size)
-    #new_proposals = tf.Variable(im_proposals, validate_shape=False)
     while_return = tf.while_loop(lambda order, *args: tf.shape(order)[0] > 0, nms_step, [order, areas, im_proposals, im_proposals, keep, threshold, size] + list(coords), shape_invariants=[order.get_shape(), areas.get_shape(), im_proposals.get_shape(), im_proposals.get_shape(), tf.TensorShape((None,)), threshold.get_shape(), size.get_shape()] + list(coords_shape))
     keep = while_return[4][1:]
     new_proposals = while_return[3]

@@ -3,6 +3,7 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from base_net import BaseNet
 
+
 class UResNet(BaseNet):
     def __init__(self, cfg, N=0):
         super(UResNet, self).__init__(cfg, N=N)
@@ -14,37 +15,66 @@ class UResNet(BaseNet):
 
         self.conv_feature_map = {}
         self.base_num_outputs = 16
-        self._num_strides = 3#4
+        self._num_strides = 3  # 4
 
     def init_placeholders(self, image=None, labels=None):
+        # FIXME Assumes batch_size of 1
         if self.is_3d:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, self.N, 1), name="image_uresnet") if image is None else image
-            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N, self.N), name="image_label") if labels is None else labels
+            self.image_placeholder = tf.placeholder(
+                tf.float32,
+                shape=(1, self.N, self.N, self.N, 1),
+                name="image_uresnet") if image is None else image
+            self.pixel_labels_placeholder = tf.placeholder(
+                tf.int32,
+                shape=(1, self.N, self.N, self.N),
+                name="image_label") if labels is None else labels
         else:
-            self.image_placeholder = tf.placeholder(tf.float32, shape=(None, self.N, self.N, 1), name="image_uresnet") if image is None else image
-            self.pixel_labels_placeholder = tf.placeholder(tf.int32, shape=(None, self.N, self.N), name="image_label") if labels is None else labels
+            self.image_placeholder = tf.placeholder(
+                tf.float32,
+                shape=(1, self.N, self.N, 1),
+                name="image_uresnet") if image is None else image
+            self.pixel_labels_placeholder = tf.placeholder(
+                tf.int32,
+                shape=(1, self.N, self.N),
+                name="image_label") if labels is None else labels
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
-        return [("image_placeholder", "image_uresnet"), ("learning_rate_placeholder", "lr"), ("pixel_labels_placeholder", "image_label")]
+        return [
+            ("image_placeholder", "image_uresnet"),
+            ("learning_rate_placeholder", "lr"),
+            ("pixel_labels_placeholder", "image_label")
+            ]
 
     def feed_dict(self, blob):
-        return { self.image_placeholder: blob['data'], self.pixel_labels_placeholder: blob['labels'], self.learning_rate_placeholder: self.learning_rate }
+        return {
+            self.image_placeholder: blob['data'],
+            self.pixel_labels_placeholder: blob['labels'],
+            self.learning_rate_placeholder: self.learning_rate
+            }
 
     def test_image(self, sess, blob):
-        predictions, scores, summary = sess.run([self._predictions, self._scores, self.summary_op], feed_dict=self.feed_dict(blob))
+        predictions, scores, summary = sess.run([
+            self._predictions,
+            self._scores,
+            self.summary_op], feed_dict=self.feed_dict(blob))
         return summary, {'predictions': predictions, 'scores': scores}
 
     def train_step_with_summary(self, sess, blobs):
-        _, summary, scores, predictions = sess.run([self.train_op, self.summary_op, self._scores, self._predictions], feed_dict=self.feed_dict(blobs))
+        _, summary, scores, predictions = sess.run([
+            self.train_op,
+            self.summary_op,
+            self._scores,
+            self._predictions], feed_dict=self.feed_dict(blobs))
         return summary, {'predictions': predictions, 'scores': scores}
 
-    def resnet_module(self, input_tensor, num_outputs, trainable=True, kernel=(3,3), stride=1, scope='noscope'):
-        num_inputs  = input_tensor.get_shape()[-1].value
+    def resnet_module(self, input_tensor, num_outputs, trainable=True,
+                      kernel=(3, 3), stride=1, scope='noscope'):
+        num_inputs = input_tensor.get_shape()[-1].value
         with tf.variable_scope(scope):
             #
             # shortcut path
             #
             shortcut = None
-            if num_outputs == num_inputs and stride ==1 :
+            if num_outputs == num_inputs and stride == 1:
                 shortcut = input_tensor
             else:
                 shortcut = self.fn_conv(inputs      = input_tensor,
@@ -82,7 +112,8 @@ class UResNet(BaseNet):
 
             return tf.nn.relu(shortcut + residual)
 
-    def double_resnet(self, input_tensor, num_outputs, trainable=True, kernel=3, stride=1, scope='noscope'):
+    def double_resnet(self, input_tensor, num_outputs, trainable=True,
+                      kernel=3, stride=1, scope='noscope'):
         with tf.variable_scope(scope):
             resnet1 = self.resnet_module(input_tensor=input_tensor,
                                     trainable=trainable,
@@ -98,44 +129,49 @@ class UResNet(BaseNet):
                                     scope='module2')
         return resnet2
 
-    def build_base_net(self, image_placeholder, is_training=True, reuse=False, scope="uresnet"):
+    def build_base_net(self, image_placeholder, is_training=True,
+                       reuse=False, scope="uresnet"):
         with tf.variable_scope(scope, reuse=reuse):
             with slim.arg_scope([self.fn_conv, slim.fully_connected],
                                 normalizer_fn=slim.batch_norm,
                                 trainable=is_training):
                 net = self.fn_conv(
-                    inputs = image_placeholder,
-                    num_outputs = self.base_num_outputs,
-                    kernel_size = 7,
-                    stride = 1,
-                #    activation_fn = tf.nn.relu, FIXME this is default?
-                    padding = 'same',
-                    scope = 'conv0')
+                    inputs=image_placeholder,
+                    num_outputs=self.base_num_outputs,
+                    kernel_size=7,
+                    stride=1,
+                    # activation_fn = tf.nn.relu, FIXME this is default?
+                    padding='same',
+                    scope='conv0')
                 self.conv_feature_map[net.get_shape()[-1].value] = net
                 # Encoding steps
                 for step in xrange(self._num_strides):
-                    net = self.double_resnet(input_tensor = net,
-                                        num_outputs  = net.get_shape()[-1].value * 2,
-                                        kernel       = 3,
-                                        stride       = 2,
-                                        scope        = 'resnet_module%d' % step)
+                    net = self.double_resnet(
+                        input_tensor=net,
+                        num_outputs=net.get_shape()[-1].value * 2,
+                        kernel=3,
+                        stride=2,
+                        scope='resnet_module%d' % step)
                     self.conv_feature_map[net.get_shape()[-1].value] = net
 
         keys = np.sort(self.conv_feature_map.keys())
         key2 = keys[-1]
-        key = keys[int(len(keys)/2.0)-1] # -1
-        print(self.conv_feature_map[key], self.conv_feature_map[key2])
-        print(self.conv_feature_map)
+        key = keys[int(len(keys)/2.0)-1]  # -1
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
-    def create_architecture(self, is_training=True, reuse=False, scope="uresnet"):
+    def create_architecture(self, is_training=True, reuse=False,
+                            scope="uresnet"):
         self.is_training = is_training
         self.reuse = reuse
 
-        with slim.arg_scope([self.fn_conv, self.fn_conv_transpose, slim.fully_connected],
+        with slim.arg_scope([self.fn_conv,
+                             self.fn_conv_transpose,
+                             slim.fully_connected],
                             normalizer_fn=slim.batch_norm,
                             trainable=is_training):
-            _, net = self.build_base_net(self.image_placeholder, is_training=is_training, reuse=reuse, scope=scope)
+            _, net = self.build_base_net(self.image_placeholder,
+                                         is_training=is_training,
+                                         reuse=reuse, scope=scope)
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
                 for step in xrange(self._num_strides):
@@ -181,23 +217,37 @@ class UResNet(BaseNet):
                               scope = 'conv2')
 
                 self._softmax = tf.nn.softmax(logits=net, name="softmax")
-                self._scores = tf.reduce_max(self._softmax, axis=-1, name="scores")
-                self._predictions = tf.argmax(self._softmax, axis=-1, name="predictions")
+                self._scores = tf.reduce_max(self._softmax, axis=-1,
+                                             name="scores")
+                self._predictions = tf.argmax(self._softmax, axis=-1,
+                                              name="predictions")
 
                 # Define loss
                 dims = self.image_placeholder.get_shape()[1:]
 
-                self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.pixel_labels_placeholder, logits=net)
-                self._loss = tf.reduce_mean(tf.reduce_sum(tf.reshape(self._loss, [-1, int(np.prod(dims) / dims[-1])]), axis=1), name="loss")
+                self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=self.pixel_labels_placeholder, logits=net)
+                self._loss = tf.reduce_mean(tf.reduce_sum(
+                    tf.reshape(self._loss,
+                               [-1, int(np.prod(dims) / dims[-1])]
+                               ), axis=1), name="loss")
                 tf.summary.scalar('loss', self._loss)
                 if is_training:
                     with tf.variable_scope('metrics'):
-                        labels = tf.argmax(net, axis=len(dims), output_type=tf.int32)
-                        self.accuracy_allpix = tf.reduce_mean(tf.cast(tf.equal(labels, self.pixel_labels_placeholder),tf.float32))
+                        labels = tf.argmax(net, axis=len(dims),
+                                           output_type=tf.int32)
+                        self.accuracy_allpix = tf.reduce_mean(tf.cast(tf.equal(
+                            labels,
+                            self.pixel_labels_placeholder
+                            ), tf.float32))
                         nonzero_idx = tf.where(tf.reshape(self.image_placeholder, tf.shape(self.image_placeholder)[:-1]) > tf.to_float(0.))
-                        nonzero_label = tf.gather_nd(self.pixel_labels_placeholder, nonzero_idx)
-                        nonzero_pred  = tf.gather_nd(labels, nonzero_idx)
-                        self.accuracy_nonzero = tf.reduce_mean(tf.cast(tf.equal(nonzero_label, nonzero_pred), tf.float32))
+                        nonzero_label = tf.gather_nd(
+                            self.pixel_labels_placeholder,
+                            nonzero_idx)
+                        nonzero_pred = tf.gather_nd(labels, nonzero_idx)
+                        self.accuracy_nonzero = tf.reduce_mean(tf.cast(
+                            tf.equal(nonzero_label, nonzero_pred),
+                            tf.float32))
                         tf.summary.scalar('accuracy_all', self.accuracy_allpix)
                         tf.summary.scalar('accuracy_nonzero', self.accuracy_nonzero)
 
@@ -205,6 +255,7 @@ class UResNet(BaseNet):
 
                 # Define summary
                 self.summary_op = tf.summary.merge_all()
+
 
 if __name__ == '__main__':
     class config(object):
