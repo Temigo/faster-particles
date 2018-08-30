@@ -22,8 +22,6 @@ class PPNMetrics(object):
         self.ppn1_false_positives = []
         self.ppn1_false_negatives = []
         self.ppn1_outliers = []
-        self.ppn2_distances_to_closest_gt_raw = []
-        self.ppn2_distances_to_closest_pred_raw = []
         self.ppn2_distances_to_closest_gt = []
         self.ppn2_distances_to_closest_pred = []
         self.ppn2_ambiguity = []
@@ -41,7 +39,7 @@ class PPNMetrics(object):
         self.threshold_false_negative = 15
         self.threshold_outliers = 15
 
-    def add(self, blob, results, im_proposals_filtered):
+    def add(self, blob, results):
         self.im_labels.extend(results['im_labels'])
         self.im_scores.extend(results['im_scores'])
         self.im_proposals.extend(results['im_proposals'])
@@ -51,21 +49,20 @@ class PPNMetrics(object):
         # self.distances[i][j] = distance between im_proposals_filtered[j] and blob['gt_pixels'][i]
         gt_pixels = blob['gt_pixels'][:, :-1]
         im_proposals = results['im_proposals']
-        distances_ppn2_raw = scipy.spatial.distance.cdist(im_proposals, gt_pixels)
-        self.ppn2_distances_to_closest_gt_raw.extend(np.amin(distances_ppn2_raw, axis=0))
-        self.ppn2_distances_to_closest_pred_raw.extend(np.amin(distances_ppn2_raw, axis=1))
-        distances_ppn2 = scipy.spatial.distance.cdist(im_proposals_filtered, gt_pixels)
+        
+        distances_ppn2 = scipy.spatial.distance.cdist(im_proposals, gt_pixels)
         self.ppn2_distances_to_closest_gt.extend(np.amin(distances_ppn2, axis=1))
         self.ppn2_distances_to_closest_pred.extend(np.amin(distances_ppn2, axis=0))
+        
         self.ppn2_ambiguity.extend(np.count_nonzero(distances_ppn2 < self.threshold_ambiguity, axis=1))
-        self.ppn2_false_positives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_positive, axis=1)) / im_proposals_filtered.shape[0])
+        self.ppn2_false_positives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_positive, axis=1)) / im_proposals.shape[0])
         self.ppn2_false_negatives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_negative, axis=0)) / gt_pixels.shape[0])
         self.ppn2_outliers.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_outliers, axis=1)))
 
         #if np.logical_and(distances_ppn2 > 5, distances_ppn2 < 6).any():
         #    print(im_proposals_filtered, distances_ppn2)
         if np.logical_and(np.amin(distances_ppn2, axis=1) > 5, np.amin(distances_ppn2, axis=1) < 10).any():
-            print(im_proposals_filtered, np.amin(distances_ppn2, axis=1))
+            print(im_proposals, np.amin(distances_ppn2, axis=1))
             # --- FIGURE 2 : PPN2 predictions ---
             fig2 = plt.figure()
             ax2 = fig2.add_subplot(111, aspect='equal', projection='3d')
@@ -113,9 +110,7 @@ class PPNMetrics(object):
         self.plot_gt_points_per_roi()
         self.plot_ratio_gt_points_roi()
         #self.ppn2_distance_to_nearest_neighbour()
-        self.ppn2_distances_to_closest_gt_raw = np.array(self.ppn2_distances_to_closest_gt_raw)
         print("Mean of PPN2 distances to closest gt = ", np.mean(self.ppn2_distances_to_closest_gt))
-        print("Mean of PPN2 distances to closest gt (raw) = ", np.mean(self.ppn2_distances_to_closest_gt_raw[np.where(self.ppn2_distances_to_closest_gt_raw < 5.0)]))
 
     def make_plot(self, data, bins=None, xlabel="", ylabel="", filename=""):
         """
@@ -165,25 +160,11 @@ class PPNMetrics(object):
             filename='ppn2_distance_to_closest_gt.png'
         )
         self.make_plot(
-            self.ppn2_distances_to_closest_gt_raw,
-            bins=50,
-            xlabel="distance to nearest ground truth pixel",
-            ylabel="#proposed pixels",
-            filename='ppn2_distance_to_closest_gt_raw.png'
-        )
-        self.make_plot(
             self.ppn2_distances_to_closest_gt,
             bins=np.linspace(0, 5, 100),
             xlabel="distance to nearest ground truth pixel",
             ylabel="#proposed pixels",
             filename='ppn2_distance_to_closest_gt_zoom.png'
-        )
-        self.make_plot(
-            self.ppn2_distances_to_closest_gt_raw,
-            bins=np.linspace(0, 5, 100),
-            xlabel="distance to nearest ground truth pixel",
-            ylabel="#proposed pixels",
-            filename='ppn2_distance_to_closest_gt_raw_zoom.png'
         )
 
     def plot_distances_to_closest_pred(self):
@@ -203,25 +184,11 @@ class PPNMetrics(object):
             filename='ppn2_distance_to_closest_pred.png'
         )
         self.make_plot(
-            self.ppn2_distances_to_closest_pred_raw,
-            bins=50,
-            xlabel="distance to nearest proposed pixel",
-            ylabel="#ground truth pixels",
-            filename='ppn2_distance_to_closest_pred_raw.png'
-        )
-        self.make_plot(
             self.ppn2_distances_to_closest_pred,
             bins=np.linspace(0, 5, 100),
             xlabel="distance to nearest proposed pixel",
             ylabel="#ground truth pixels",
             filename='ppn2_distance_to_closest_pred_zoom.png'
-        )
-        self.make_plot(
-            self.ppn2_distances_to_closest_pred_raw,
-            bins=np.linspace(0, 5, 100),
-            xlabel="distance to nearest proposed pixel",
-            ylabel="#ground truth pixels",
-            filename='ppn2_distance_to_closest_pred_raw_zoom.png'
         )
 
     def plot_ambiguity(self):
