@@ -16,7 +16,7 @@ from faster_particles.demo_ppn import get_filelist, load_weights
 from faster_particles.display_utils import display, display_uresnet, \
                                             display_ppn_uresnet
 from faster_particles.base_net import basenets
-from faster_particles import cropping
+from faster_particles.cropping import cropping_algorithms
 
 
 class Trainer(object):
@@ -42,7 +42,7 @@ class Trainer(object):
     def process_blob(self, i, blob, real_step, saver, is_testing,
                      summary_writer_train, summary_writer_test):
         real_step += 1
-        is_drawing = real_step % 1 == 0
+        is_drawing = real_step % 1000 == 0
 
         if real_step % 100 == 0:
             print("(Real) Step %d" % real_step)
@@ -90,16 +90,15 @@ class Trainer(object):
                                  )
                     self.cfg.IMAGE_SIZE = N
         else:
-            # FIXME change crop function to take channels into account
-            if self.cfg.ENABLE_CROP:
-                blob['data'] = blob['data'][..., np.newaxis]
             if is_testing:
                 summary, result = self.test_net.test_image(self.sess, blob)
                 summary_writer_test.add_summary(summary, real_step)
             else:
                 summary, result = self.train_net.train_step_with_summary(self.sess, blob)
                 summary_writer_train.add_summary(summary, real_step)
+            # print(np.count_nonzero(blob['data']), np.count_nonzero(result['predictions']))
             if is_drawing and self.display is not None:
+                print('Drawing...')
                 if self.cfg.NET == 'ppn':
                     result['dim1'] = self.train_net.dim1
                     result['dim2'] = self.train_net.dim2
@@ -115,6 +114,7 @@ class Trainer(object):
                              **result)
                 if self.cfg.ENABLE_CROP:
                     self.cfg.IMAGE_SIZE = N
+                print("Done.")
 
         if real_step % 1000 == 0:
             save_path = saver.save(self.sess,
@@ -155,7 +155,7 @@ class Trainer(object):
         saver = tf.train.Saver()
 
         step = 0
-        crop_algorithm = cropping.Probabilistic(self.cfg)
+        crop_algorithm = cropping_algorithms[self.cfg.CROP_ALGO](self.cfg)
 
         print("Start training...")
         real_step = 0

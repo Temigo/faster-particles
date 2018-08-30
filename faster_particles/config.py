@@ -20,6 +20,7 @@ class PPNConfig(object):
     CROP_SIZE = 24
     SLICE_SIZE = 64
     ENABLE_CROP = False
+    CROP_ALGO = "proba"
 
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
@@ -140,6 +141,7 @@ class PPNConfig(object):
         parser.add_argument("-ss", "--slice-size", action='store', default=self.SLICE_SIZE, type=int, help="Width (and height) of cropped slice from image.")
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
         parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
+        parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
 
     def parse_args(self):
         args = self.parser.parse_args()

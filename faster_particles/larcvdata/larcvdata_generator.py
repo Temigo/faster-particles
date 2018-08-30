@@ -191,7 +191,10 @@ class LarcvGenerator(object):
         # Crop regions around gt points for small UResNet
         if self.cfg.NET == 'small_uresnet':
             blob['crops'], blob['crops_labels'] = crop(
-                blob['gt_pixels'][:, :-1], self.cfg.CROP_SIZE, blob['data'])
+                blob['gt_pixels'][:, :-1],
+                self.cfg.CROP_SIZE,
+                blob['data'],
+                use_smear=True)
 
         return blob
 

@@ -138,7 +138,7 @@ class UResNet(BaseNet):
                 net = self.fn_conv(
                     inputs=image_placeholder,
                     num_outputs=self.base_num_outputs,
-                    kernel_size=7,
+                    kernel_size=3,
                     stride=1,
                     # activation_fn = tf.nn.relu, FIXME this is default?
                     padding='same',
@@ -205,7 +205,7 @@ class UResNet(BaseNet):
                 net = self.fn_conv(inputs      = net,
                               num_outputs = self.base_num_outputs,
                               padding     = 'same',
-                              kernel_size = 7,
+                              kernel_size = 3,
                               stride      = 1,
                               scope       = 'conv1')
                 net = self.fn_conv(inputs      = net,
@@ -223,14 +223,18 @@ class UResNet(BaseNet):
                                               name="predictions")
 
                 # Define loss
-                dims = self.image_placeholder.get_shape()[1:]
+                dims = self.image_placeholder.get_shape()[1:-1]
 
                 self._loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
                     labels=self.pixel_labels_placeholder, logits=net)
+                # self._loss = tf.reduce_mean(tf.reduce_sum(
+                #     tf.reshape(self._loss,
+                #                [-1, int(np.prod(dims) / dims[-1])]
+                #                ), axis=1), name="loss")
                 self._loss = tf.reduce_mean(tf.reduce_sum(
-                    tf.reshape(self._loss,
-                               [-1, int(np.prod(dims) / dims[-1])]
-                               ), axis=1), name="loss")
+                    tf.reshape(self._loss, [-1, int(np.prod(dims))]),
+                    axis=1), name="loss"
+                )
                 tf.summary.scalar('loss', self._loss)
                 if is_training:
                     with tf.variable_scope('metrics'):

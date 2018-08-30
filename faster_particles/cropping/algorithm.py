@@ -22,24 +22,35 @@ class CroppingAlgorithm(object):
         pass
 
     def process(self, original_blob):
+        # FIXME cfg.SLICE_SIZE vs patch_size
         patch_centers, patch_sizes = self.crop(original_blob['voxels'])
         batch_blobs = []
         for i in range(len(patch_centers)):
             patch_center, patch_size = patch_centers[i], patch_sizes[i]
             blob = {}
-            blob['data'], _ = crop_util(np.array([patch_center]),
-                                        self.cfg.SLICE_SIZE,
-                                        original_blob['data'])
-
-            if 'labels' in original_blob:
-                blob['labels'], _ = crop_util(np.array([patch_center]),
-                                              self.cfg.SLICE_SIZE,
-                                              original_blob['labels'][..., np.newaxis])
 
             # Flip patch_center coordinates
             # because gt_pixels coordinates are reversed
             # FIXME here or before blob['data'] ??
             patch_center = np.flipud(patch_center)
+
+            blob['data'], _ = crop_util(np.array([patch_center]),
+                                        self.cfg.SLICE_SIZE,
+                                        original_blob['data'])
+            patch_center = patch_center.astype(int)
+            # print(patch_center, original_blob['data'][0, patch_center[0], patch_center[1], patch_center[2], 0], np.count_nonzero(blob['data']))
+            # assert np.count_nonzero(blob['data']) > 0
+            if 'labels' in original_blob:
+                blob['labels'], _ = crop_util(np.array([patch_center]),
+                                              self.cfg.SLICE_SIZE,
+                                              original_blob['labels'][..., np.newaxis])
+                blob['labels'] = blob['labels'][..., 0]
+            # print(np.nonzero(blob['data']))
+            # print(np.nonzero(blob['labels']))
+            # assert np.array_equal(np.nonzero(blob['data']), np.nonzero(blob['labels']))
+
+
+
             # Select gt pixels
             if 'gt_pixels' in original_blob:
                 indices = np.where(np.all(np.logical_and(

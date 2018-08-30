@@ -22,7 +22,7 @@ python faster_particles/bin/ppn.py train \
   --net base \
   --data "/data/dlprod_ppn_v08_p01/train.root" \
   -N 512 \
-  -m 1 \
+  -m 100000 \
   --enable-crop \
   -ss 128 \
   -3d

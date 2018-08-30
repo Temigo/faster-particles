@@ -5,15 +5,21 @@ import numpy as np
 import tensorflow as tf
 
 
-def crop(patch_centers, N, data):
-    coords0 = np.floor(patch_centers - N/2.0).astype(int)  # bottom left corner
-    coords1 = np.floor(patch_centers + N/2.0).astype(int)  # top right corner
-    dim = len(data.shape) - 2
-    smear = np.random.randint(-N/2+1, high=N/2, size=dim)
+def crop(patch_centers, N, data, use_smear=False):
+    """
+    Slice patches of size N centered at patch_centers in data.
+    Assumes data has shape (batch_size, M, M, M, channels)
+    or (batch_size, M, M, channels)
+    TODO batch_size
+    """
+    coords0 = np.floor(patch_centers - N/2.0)  # bottom left corner
+    coords1 = np.floor(patch_centers + N/2.0)  # top right corner
+    dim = patch_centers.shape[1]
+    smear = np.random.randint(-N/2+1, high=N/2, size=dim) if use_smear else np.zeros((dim,))
     image_size = data.shape[1]
-    coords0 = np.clip(coords0 + smear, 0, image_size-1)
-    coords1 = np.clip(coords1 + smear, 0, image_size-1)
-    crops = np.zeros((coords0.shape[0],) + (N,) * dim)
+    coords0 = np.clip(coords0 + smear, 0, image_size).astype(int)
+    coords1 = np.clip(coords1 + smear, 0, image_size).astype(int)
+    crops = np.zeros((coords0.shape[0],) + (N,) * dim + (data.shape[-1],))
     crops_labels = np.zeros_like(crops)
     for j in range(len(coords0)):
         padding = []
@@ -23,18 +29,19 @@ def crop(patch_centers, N, data):
                 padding.append((pad, 0))
             else:
                 padding.append((0, pad))
+        padding.append((0, 0))
         if dim == 2:
             crops[j] = np.pad(data[0,
                                    coords0[j, 0]:coords1[j, 0],
                                    coords0[j, 1]:coords1[j, 1],
-                                   0],
+                                   :],
                               padding, 'constant')
         else:  # dim == 3
             crops[j] = np.pad(data[0,
                                    coords0[j, 0]:coords1[j, 0],
                                    coords0[j, 1]:coords1[j, 1],
                                    coords0[j, 2]:coords1[j, 2],
-                                   0],
+                                   :],
                               padding, 'constant')
         indices = np.where(crops[j] > 0)
         crops_labels[j][indices] = 1
@@ -42,8 +49,8 @@ def crop(patch_centers, N, data):
         if dim == 2:
             indices = np.where(crops[j,
                                      int(N/2-1-smear[0]):int(N/2+2-smear[0]),
-                                     int(N/2-1-smear[1]):int(N/2+2-smear[1])
-                                     ] > 0)
+                                     int(N/2-1-smear[1]):int(N/2+2-smear[1]),
+                                     :] > 0)
             a = indices[0] + int(N/2 - 1-smear[0])
             b = indices[1] + int(N/2 - 1-smear[1])
             crops_labels[j][a, b] = 2
@@ -51,8 +58,8 @@ def crop(patch_centers, N, data):
             indices = np.where(crops[j,
                                      int(N/2-1-smear[0]):int(N/2+2-smear[0]),
                                      int(N/2-1-smear[1]):int(N/2+2-smear[1]),
-                                     int(N/2-1-smear[2]):int(N/2+2-smear[2])
-                                     ] > 0)
+                                     int(N/2-1-smear[2]):int(N/2+2-smear[2]),
+                                     :] > 0)
             a = indices[0] + int(N/2 - 1-smear[0])
             b = indices[1] + int(N/2 - 1-smear[1])
             c = indices[2] + int(N/2 - 1-smear[2])
