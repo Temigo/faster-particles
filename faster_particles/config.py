@@ -20,10 +20,13 @@ class PPNConfig(object):
     CROP_SIZE = 24
     SLICE_SIZE = 64
     ENABLE_CROP = False
+    CROP_ALGO = "proba"
+
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
-    NUM_CLASSES = 3
+
+    NUM_CLASSES = 3 # For base network only
     R = 20
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
@@ -41,23 +44,14 @@ class PPNConfig(object):
     MAX_STEPS = 100
     WEIGHT_LOSS = False # FIXME make it False by default
     MIN_SCORE=0.0
+    POSTPROCESSING = 'nms' # Postprocessing: use either NMS or DBSCAN
 
     # Data configuration
     BATCH_SIZE = 1
     SEED = 123
     NEXT_INDEX = 0
     TOYDATA = False
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p[01]*.root"
-    # DATA = "/stage/drinkingkazu/dlprod_ppn_v05/ppn_p01.root" # For 2D
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00.root" # For 3D
-    # DATA = "/data/drinkingkazu/dlprod_ppn_v05/ppn_p00_0000_0019.root" # For 3D
-    # DATA = "/data/drinkingkazu/dlprod_multipvtx_v05/mix/hit_mix00.root" # For UResNet 2D
-    #DATA = "/stage/drinkingkazu/u-resnet/vertex_data/out.root" # For UResNet 3D
-    # or /stage/drinkingkazu/u-resnet/multipvtx_data/out.root
-    # DATA = ""
-    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/train.root"
-    #DATA = "/stage/drinkingkazu/dlprod_ppn_v06/blur_train.root"
-    DATA = "/stage/drinkingkazu/fuckgrid/p*/larcv.root"
+    DATA = "/data/dlprod_ppn_v08_p01/test.root"
     DATA_3D = False
 
     # Track configuration
@@ -78,7 +72,7 @@ class PPNConfig(object):
     SHOWER_OUT_PNG = False
 
     # Environment variables
-    CUDA_VISIBLE_DEVICES = '0,1,2,3'
+    CUDA_VISIBLE_DEVICES = '0,1'
 
     def __init__(self):
         self.create_parsers()
@@ -146,7 +140,8 @@ class PPNConfig(object):
         parser.add_argument("-ec", "--enable-crop", default=self.ENABLE_CROP, action='store_true', help="Crop original data to smaller windows.")
         parser.add_argument("-ss", "--slice-size", action='store', default=self.SLICE_SIZE, type=int, help="Width (and height) of cropped slice from image.")
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
-
+        parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
+        parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
 
     def parse_args(self):
         args = self.parser.parse_args()

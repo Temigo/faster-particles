@@ -10,7 +10,7 @@ class BaseNet(object):
     PPN will assume this class structure for the base network.
     """
     def __init__(self, cfg, N=0):
-        self.N = cfg.IMAGE_SIZE if N == 0 else N
+        self.N = cfg.SLICE_SIZE if cfg.ENABLE_CROP else (cfg.IMAGE_SIZE if N == 0 else N)
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = cfg.LEARNING_RATE
         self.is_3d = cfg.DATA_3D

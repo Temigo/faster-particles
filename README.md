@@ -103,6 +103,8 @@ Use the command `ppn demo -d display/dir -m N_inferences` followed by:
 More options such as thresholds are available through `ppn train -h` and `ppn demo -h` respectively.
 
 ### 2.5 Examples <a name="2.5-examples"></a>
+You can find some example scripts under the `examples` directory.
+
 To train PPN on 1000 steps use:
 ```bash
 ppn train -o output/dir/ -l log/dir/ -d display/dir --net ppn -m 1000 --data path/to/data

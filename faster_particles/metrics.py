@@ -118,10 +118,14 @@ class PPNMetrics(object):
         """
         data = np.array(data)
         if bins is None:
-            d = np.diff(np.unique(data)).min()
-            left_of_first_bin = data.min() - float(d)/2
-            right_of_last_bin = data.max() + float(d)/2
-            bins = np.arange(left_of_first_bin, right_of_last_bin + d, d)
+            a = np.diff(np.unique(data))
+            if len(a) > 0:
+                d = a.min()
+                left_of_first_bin = data.min() - float(d)/2
+                right_of_last_bin = data.max() + float(d)/2
+                bins = np.arange(left_of_first_bin, right_of_last_bin + d, d)
+            else:
+                bins = 100
 
         plt.hist(data, bins)
         plt.xlabel(xlabel)

@@ -7,12 +7,13 @@ from __future__ import print_function
 import unittest
 import numpy as np
 import tensorflow as tf
-from faster_particles.ppn import PPN
-from faster_particles.ppn_utils import generate_anchors, top_R_pixels, clip_pixels, \
+from faster_particles.ppn_utils import generate_anchors, \
+    top_R_pixels, clip_pixels, \
     compute_positives_ppn1, compute_positives_ppn2, assign_gt_pixels, \
-    include_gt_pixels, predicted_pixels, crop_pool_layer, all_combinations, slice_rois, \
+    include_gt_pixels, predicted_pixels, crop_pool_layer, \
+    all_combinations, slice_rois, \
     nms_step, nms
-from faster_particles.toydata.toydata_generator import ToydataGenerator
+
 
 def generate_anchors_np(im_shape, repeat=1):
     dim = len(im_shape)
@@ -20,6 +21,7 @@ def generate_anchors_np(im_shape, repeat=1):
     anchors = anchors + 0.5
     anchors = np.reshape(anchors, (-1, dim))
     return np.repeat(anchors, repeat, axis=0)
+
 
 def clip_pixels_np(pixels, im_shape):
     """
@@ -31,12 +33,11 @@ def clip_pixels_np(pixels, im_shape):
         pixels[:, i] = np.clip(pixels[:, i], 0, im_shape[i])
     return pixels
 
+
 class Test(unittest.TestCase):
-    #self.toydata = ToydataGenerator(N=512, max_tracks=5, max_kinks=2, max_track_length=200)
-    #self.net = PPN()
     def generate_anchors(self, im_shape, repeat):
         anchors_np = generate_anchors_np(im_shape, repeat=repeat)
-        with tf.Session() as sess:
+        with tf.Session():
             anchors_tf = generate_anchors(im_shape, repeat=repeat)
             return np.array_equal(anchors_tf, anchors_np)
 
@@ -107,7 +108,7 @@ class Test(unittest.TestCase):
         scores = rpn_cls_prob_np[..., 1:]
         roi_scores_np = np.reshape(scores, (-1, scores.shape[-1]))
         anchors_np = np.reshape(anchors_np, (-1,) + (rpn_cls_prob_np.shape[1],) * dim + (dim,))
-        proposals =  anchors_np + rpn_bbox_pred_np
+        proposals = anchors_np + rpn_bbox_pred_np
         proposals = np.reshape(proposals, (-1, dim))
         # clip predicted pixels to the image
         proposals = clip_pixels_np(proposals, im_shape) # FIXME np function
@@ -344,6 +345,7 @@ class Test(unittest.TestCase):
 
             result_np = sess.run(result)
             return np.allclose(result_np[-3], np.array([0, 1]))
+
 
 if __name__ == '__main__':
     unittest.main()

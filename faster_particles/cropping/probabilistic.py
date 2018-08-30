@@ -2,6 +2,10 @@ from algorithm import CroppingAlgorithm
 import numpy as np
 
 class Probabilistic(CroppingAlgorithm):
+    """
+    Probabilistic cropping algorithm.
+    """
+
     def __init__(self, cfg):
         super(Probabilistic, self).__init__(cfg)
 
@@ -18,6 +22,7 @@ class Probabilistic(CroppingAlgorithm):
             indices_inside = np.argwhere(selection_inside)
             voxels_inside = coords[selection_inside]
             distances_to_center = np.sqrt(np.sum(np.power(voxels_inside - coords[indices], 2), axis=-1))
+
             new_proba = np.ones_like(proba)
             core_indices = distances_to_center <= self.a
             new_proba[indices_inside[core_indices]] = 0.01
