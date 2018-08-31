@@ -1,6 +1,7 @@
 from algorithm import CroppingAlgorithm
 import numpy as np
 
+
 class Probabilistic(CroppingAlgorithm):
     """
     Probabilistic cropping algorithm.
@@ -14,9 +15,9 @@ class Probabilistic(CroppingAlgorithm):
         proba = np.ones((n)) / n
         i = 0
         max_patches = 100
-        patches = [] # List of center coordinates of patches dxd
+        patches = []  # List of center coordinates of patches dxd
         voxel_num_boxes = np.zeros_like(proba)
-        while np.count_nonzero(voxel_num_boxes < 2) > 0 and  i < max_patches:
+        while np.count_nonzero(voxel_num_boxes < 2) > 0 and i < max_patches:
             indices = np.random.choice(np.arange(n), p=proba)
             selection_inside = np.all(np.logical_and(coords >= coords[indices] - self.d/2, coords <= coords[indices] + self.d/2), axis=-1)
             indices_inside = np.argwhere(selection_inside)
@@ -28,7 +29,7 @@ class Probabilistic(CroppingAlgorithm):
             new_proba[indices_inside[core_indices]] = 0.01
             new_proba[indices_inside[np.logical_and(np.logical_not(core_indices), distances_to_center <= self.d)]] = 0.4
 
-            voxel_num_boxes[indices_inside] += 1 # Update voxel_num_boxes: increment all voxels inside box
+            voxel_num_boxes[indices_inside] += 1  # Update voxel_num_boxes: increment all voxels inside box
             patches.append(coords[indices])
             i += 1
             proba = proba * new_proba

@@ -10,9 +10,7 @@ import os
 import numpy as np
 
 from faster_particles.ppn import PPN
-from faster_particles import ToydataGenerator
-from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
-from faster_particles.demo_ppn import get_filelist, load_weights
+from faster_particles.demo_ppn import load_weights, get_data
 from faster_particles.display_utils import display, display_uresnet, \
                                             display_ppn_uresnet
 from faster_particles.base_net import basenets
@@ -156,6 +154,9 @@ class Trainer(object):
 
         step = 0
         crop_algorithm = cropping_algorithms[self.cfg.CROP_ALGO](self.cfg)
+        if self.cfg.ENABLE_CROP:
+            self.batch_size = self.cfg.BATCH_SIZE
+            self.cfg.BATCH_SIZE = 1
 
         print("Start training...")
         real_step = 0
@@ -171,27 +172,21 @@ class Trainer(object):
                 batch_blobs = crop_algorithm.process(blob)
             else:
                 batch_blobs = [blob]
-            for i, blob in enumerate(batch_blobs):
+
+            i = 0
+            while i < len(batch_blobs):
+                blobs = batch_blobs[i:min(i+self.batch_size, len(batch_blobs))]
+                blob = {}
+                for key in blobs[0]:
+                    blob[key] = np.concatenate([b[key] for b in blobs])
+
+                i += len(blob)
                 real_step = self.process_blob(i, blob, real_step, saver,
                                               is_testing, summary_writer_train,
                                               summary_writer_test)
         summary_writer_train.close()
         summary_writer_test.close()
         print("Done.")
-
-
-def get_data(cfg):
-    """
-    Define data generators (toydata or LArCV)
-    """
-    if cfg.TOYDATA:
-        train_data = ToydataGenerator(cfg)
-        test_data = ToydataGenerator(cfg)
-    else:
-        filelist = get_filelist(cfg.DATA)
-        train_data = LarcvGenerator(cfg, ioname="train", filelist=filelist)
-        test_data = LarcvGenerator(cfg, ioname="test", filelist=filelist)
-    return train_data, test_data
 
 
 def train_ppn(cfg):

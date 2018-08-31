@@ -7,17 +7,42 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import sys, os, subprocess, glob, time
+import os
+import glob
+import time
 
-from faster_particles.display_utils import display, display_uresnet, display_ppn_uresnet
+from faster_particles.display_utils import display, display_uresnet, \
+                                            display_ppn_uresnet
 from faster_particles.ppn import PPN
 from faster_particles.base_net.uresnet import UResNet
 from faster_particles.base_net import basenets
+from faster_particles.metrics import PPNMetrics
 from faster_particles import ToydataGenerator
 from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
-from faster_particles.metrics import PPNMetrics
+from faster_particles.hdf5data.hdf5data_generator import HDF5Generator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
+
+
+def get_data(cfg):
+    """
+    Define data generators (toydata or LArCV)
+    """
+    if cfg.TEST_DATA == "":
+        cfg.TEST_DATA = cfg.DATA
+    if cfg.TOYDATA:
+        train_data = ToydataGenerator(cfg)
+        test_data = ToydataGenerator(cfg)
+    elif cfg.HDF5:
+        train_data = HDF5Generator(cfg, filelist=cfg.DATA)
+        test_data = HDF5Generator(cfg, filelist=cfg.TEST_DATA)
+    else:
+        train_data = LarcvGenerator(cfg, ioname="train",
+                                    filelist=get_filelist(cfg.DATA))
+        test_data = LarcvGenerator(cfg, ioname="test",
+                                   filelist=get_filelist(cfg.TEST_DATA))
+    return train_data, test_data
+
 
 def load_weights(cfg, sess):
     print("Restoring checkpoint file...")
@@ -43,25 +68,18 @@ def load_weights(cfg, sess):
             print("WARNING No variable was restored from weights file %s." % weights_file)
     print("Done.")
 
-# Returns a list of files as a string *without spaces*
-# e.g. "["file1.root","file2.root"]"
+
 def get_filelist(ls_command):
+    """
+    Returns a list of files as a string *without spaces*
+    e.g. "["file1.root","file2.root"]"
+    """
     filelist = glob.glob(ls_command)
     for f in filelist:
         if not os.path.isfile(f):
             raise Exception("Datafile %s not found!" % f)
     return str(filelist).replace('\'', '\"').replace(" ", "")
 
-def get_data(cfg):
-    if cfg.TOYDATA:
-        if cfg.NET == 'ppn':
-            data = ToydataGenerator(cfg)
-        else:
-            data = ToydataGenerator(cfg, classification=True)
-    else:
-        filelist = get_filelist(cfg.DATA)
-        data = LarcvGenerator(cfg, ioname="inference", filelist=filelist)
-    return data
 
 def inference_simple(cfg, blobs, net, num_test=10):
     net.init_placeholders()
@@ -75,9 +93,10 @@ def inference_simple(cfg, blobs, net, num_test=10):
             inference.append(results)
     return inference
 
+
 def inference_full(cfg):
-    #if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
-    #    raise Exception("Need both weights files for full inference.")
+    # if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
+    #     raise Exception("Need both weights files for full inference.")
 
     num_test = cfg.MAX_STEPS
     inference_base, inference_ppn, blobs = [], [], []
@@ -107,7 +126,7 @@ def inference_full(cfg):
     print("Saving displays...")
     metrics = PPNMetrics(cfg, dim1=net_ppn.dim1, dim2=net_ppn.dim2)
     for i in range(num_test):
-        #results = {**inference_base[i], **inference_ppn[i]}
+        # results = {**inference_base[i], **inference_ppn[i]}
         results = inference_base[i].copy()
         results.update(inference_ppn[i])
         display_ppn_uresnet(
@@ -121,6 +140,7 @@ def inference_full(cfg):
     metrics.plot()
     print("Done.")
     # Clustering: k-means? DBSCAN?
+
 
 def crop_step(crops, coords0, coords1, data, N):
     j = tf.shape(crops)[0]-1
@@ -137,6 +157,7 @@ def crop_step(crops, coords0, coords1, data, N):
     crops = tf.concat([crops, [new_crop]], axis=0)
     return crops, coords0, coords1, data, N
 
+
 def crop_proposals(cfg, data, proposals):
     N = cfg.CROP_SIZE
     coords0 = tf.cast(tf.floor(proposals - N/2.0), tf.int32)
@@ -149,6 +170,7 @@ def crop_proposals(cfg, data, proposals):
     results = tf.while_loop(lambda crops, coords0, *args: tf.shape(crops)[0] <= tf.shape(coords0)[0], crop_step, [crops, coords0, coords1, data, N], shape_invariants=[tf.TensorShape((None, N, N)), coords0.get_shape(), coords1.get_shape(), data.get_shape(), tf.TensorShape(())])
     crops = results[0][1:, :, :]
     return crops
+
 
 def inference_ppn_ext(cfg):
     num_test = cfg.MAX_STEPS
@@ -223,6 +245,7 @@ def inference_ppn_ext(cfg):
 
             cfg.IMAGE_SIZE = N
 
+
 def inference(cfg):
     data = get_data(cfg)
     is_ppn = cfg.NET == 'ppn'
@@ -230,7 +253,7 @@ def inference(cfg):
         net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
         if cfg.WEIGHTS_FILE_PPN is None:
             pass
-            #raise Exception("Need a checkpoint file for PPN at least")
+            # raise Exception("Need a checkpoint file for PPN at least")
     elif cfg.NET == 'base':
         net = basenets[cfg.BASE_NET](cfg=cfg)
         if cfg.WEIGHTS_FILE_PPN is None and cfg.WEIGHTS_FILE_BASE is None:
@@ -273,6 +296,7 @@ def inference(cfg):
     if is_ppn:
         metrics.plot()
 
+
 if __name__ == '__main__':
-    #inference(cfg)
+    # inference(cfg)
     inference_full(cfg)

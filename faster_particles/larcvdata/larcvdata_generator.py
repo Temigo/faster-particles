@@ -76,11 +76,11 @@ class LarcvGenerator(object):
         voxels, voxels_value = [], []
         indices = np.nonzero(image)[0]
         for i in indices:
-            x = i%self.N
+            x = i % self.N
             i = (i-x)/self.N
-            y = i%self.N
+            y = i % self.N
             i = (i-y)/self.N
-            z = i%self.N
+            z = i % self.N
             voxels.append([x, y, z])
             # voxels_value.append(image[i])
         return voxels
@@ -141,8 +141,8 @@ class LarcvGenerator(object):
         # batch_event_ids = self.proc.fetch_event_ids()
 
         gt_pixels, output, output_labels, output_voxels, final_entries = [], [], [], [], []
-        img_shape = (1,) + (self.N,) * self.dim + (1,)
-        labels_shape = (1,) + (self.N,) * self.dim
+        img_shape = (self.cfg.BATCH_SIZE,) + (self.N,) * self.dim + (1,)
+        labels_shape = (self.cfg.BATCH_SIZE,) + (self.N,) * self.dim
         voxels_shape = (-1, self.dim)
 
         for index in np.arange(self.cfg.BATCH_SIZE):
@@ -157,13 +157,15 @@ class LarcvGenerator(object):
             final_entries.append(entry_id)
             voxels = self.extract_voxels(image) if self.cfg.DATA_3D else self.extract_pixels(image)
 
-            image = image.reshape(img_shape)
+            image = image.reshape(img_shape[1:])
             if include_labels:
-                labels = labels.reshape(labels_shape)
+                labels = labels.reshape(labels_shape[1:])
 
             # TODO set N from this
+            # TODO For now we only consider batch size 1
             if include_ppn:
                 gt_pixels.extend(self.extract_gt_pixels(t_points, s_points))
+
             if not include_ppn or len(gt_pixels) > 0:
                 output.append(image)
                 if include_labels:
@@ -174,7 +176,6 @@ class LarcvGenerator(object):
             print("DUMP - no gt pixels in this batch, try next batch")
             return self.forward()
 
-        # TODO For now we only consider batch size 1
         output = np.reshape(np.array(output), img_shape)
         if include_labels:
             output_labels = np.reshape(np.array(output_labels), labels_shape)

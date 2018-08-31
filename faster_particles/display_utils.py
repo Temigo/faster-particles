@@ -171,20 +171,20 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
         plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
         plt.close(fig3)
 
-    if scores is not None:
-        fig4 = plt.figure()
-        ax4 = fig4.add_subplot(111, aspect='equal', **kwargs)
-        blob_pred = {}
-        if cfg.DATA_3D:
-            blob_pred['data'] = scores[0,...]
-            blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(scores[0,...])
-        else:
-            blob_pred['data'] = scores[:, :, :, np.newaxis]
-        display_original_image(blob_pred, cfg, ax4, vmax=1.0)
-        set_image_limits(cfg, ax4)
-        # Use dpi=1000 for high resolution
-        plt.savefig(os.path.join(directory, name + '_scores_%d.png' % index), bbox_inches='tight')
-        plt.close(fig4)
+    # if scores is not None:
+    #     fig4 = plt.figure()
+    #     ax4 = fig4.add_subplot(111, aspect='equal', **kwargs)
+    #     blob_pred = {}
+    #     if cfg.DATA_3D:
+    #         blob_pred['data'] = scores[0,...]
+    #         blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(scores[0,...])
+    #     else:
+    #         blob_pred['data'] = scores[:, :, :, np.newaxis]
+    #     display_original_image(blob_pred, cfg, ax4, vmax=1.0)
+    #     set_image_limits(cfg, ax4)
+    #     # Use dpi=1000 for high resolution
+    #     plt.savefig(os.path.join(directory, name + '_scores_%d.png' % index), bbox_inches='tight')
+    #     plt.close(fig4)
 
 
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,

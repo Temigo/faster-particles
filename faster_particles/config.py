@@ -8,25 +8,26 @@ from demo_ppn import inference, inference_full, inference_ppn_ext
 from train_ppn import train_ppn, train_classification, train_small_uresnet
 
 
-
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # Control Tensorflow verbose level with TF_CPP_MIN_LOG_LEVEL
 # it defaults to 0 (all logs shown), but can be set to 1 to filter out INFO logs,
 # 2 to additionally filter out WARNING logs, and 3 to additionally filter out ERROR logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
+
 class PPNConfig(object):
-    IMAGE_SIZE = 768 # 512
+    IMAGE_SIZE = 768  # 512
     CROP_SIZE = 24
     SLICE_SIZE = 64
     ENABLE_CROP = False
     CROP_ALGO = "proba"
+    HDF5 = False
 
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
 
-    NUM_CLASSES = 3 # For base network only
+    NUM_CLASSES = 3  # For base network only
     R = 20
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
@@ -34,17 +35,17 @@ class PPNConfig(object):
     LAMBDA_PPN = 0.5
     LAMBDA_PPN1 = 0.5
     LAMBDA_PPN2 = 0.5
-    WEIGHTS_FILE = None # Path to pretrained checkpoint
+    WEIGHTS_FILE = None  # Path to pretrained checkpoint
     WEIGHTS_FILE_BASE = None
     WEIGHTS_FILE_PPN = None
     WEIGHTS_FILE_SMALL = None
-    FREEZE = False # Whether to freeze the weights of base net
+    FREEZE = False  # Whether to freeze the weights of base net
     NET = 'ppn'
     BASE_NET = 'vgg'
     MAX_STEPS = 100
-    WEIGHT_LOSS = False # FIXME make it False by default
-    MIN_SCORE=0.0
-    POSTPROCESSING = 'nms' # Postprocessing: use either NMS or DBSCAN
+    WEIGHT_LOSS = False
+    MIN_SCORE = 0.0
+    POSTPROCESSING = 'nms'  # Postprocessing: use either NMS or DBSCAN
 
     # Data configuration
     BATCH_SIZE = 1
@@ -52,6 +53,7 @@ class PPNConfig(object):
     NEXT_INDEX = 0
     TOYDATA = False
     DATA = "/data/dlprod_ppn_v08_p01/test.root"
+    TEST_DATA = ""
     DATA_3D = False
 
     # Track configuration
@@ -72,11 +74,10 @@ class PPNConfig(object):
     SHOWER_OUT_PNG = False
 
     # Environment variables
-    CUDA_VISIBLE_DEVICES = '0,1'
+    GPU = '1'
 
     def __init__(self):
         self.create_parsers()
-        os.environ['CUDA_VISIBLE_DEVICES'] = self.CUDA_VISIBLE_DEVICES
 
     def create_parsers(self):
         self.parser = argparse.ArgumentParser(description="Pixel Proposal Network")
@@ -112,9 +113,10 @@ class PPNConfig(object):
         parser.add_argument("-wb", "--weights-file-base", help="Tensorflow .ckpt file to load weights of trained base network.")
         parser.add_argument("-wp", "--weights-file-ppn", help="Tensorflow .ckpt file to load weights of trained PPN.") # does not load base net weights
         parser.add_argument("-ws", "--weights-file-small", help="Tensorflow .ckpt file to load weights of small UResNet.")
-        parser.add_argument("-gpu", "--gpu", default=self.CUDA_VISIBLE_DEVICES, type=str, help="CUDA visible devices list (in a string and separated by commas).")
+        parser.add_argument("-gpu", "--gpu", default=self.GPU, type=str, help="CUDA visible devices list (in a string and separated by commas).")
         parser.add_argument("-3d", "--data-3d", default=self.DATA_3D, action='store_true', help="Use 3D instead of 2D.")
         parser.add_argument("-data", "--data", default=self.DATA, type=str, help="Path to data files. Can use ls regex format.")
+        parser.add_argument("-tdata", "--test-data", default=self.TEST_DATA, type=str, help="Path to test data files. Can use ls regex format.")
         parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
         parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base', 'full', 'small_uresnet', 'ppn_ext'], help="Whether to use base net or PPN net or both.")
@@ -142,6 +144,7 @@ class PPNConfig(object):
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
         parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
         parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
+        parser.add_argument("-hdf5", "--hdf5", action='store_true', default=self.HDF5, help="Use HDF5 data file reader.")
 
     def parse_args(self):
         args = self.parser.parse_args()
@@ -157,11 +160,14 @@ class PPNConfig(object):
         elif self.NET == 'ppn_ext' and args.script == 'demo':
             args.func = inference_ppn_ext
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
-            print("WARNING You are freezing the base net weights without loading any checkpoint file.")
+            print("WARNING You are freezing the base net weights \
+                  without loading any checkpoint file.")
 
         # Set random seed for reproducibility
         np.random.seed(self.SEED)
         tf.set_random_seed(self.SEED)
+
+        os.environ['CUDA_VISIBLE_DEVICES'] = self.GPU
 
         args.func(self)
 
@@ -169,5 +175,6 @@ class PPNConfig(object):
         for name in args:
             if name != "func" and name != 'script':
                 setattr(self, name.upper(), args[name])
+
 
 cfg = PPNConfig()

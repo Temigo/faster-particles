@@ -15,14 +15,16 @@
 # Short version of the arguments can be found in config.py
 
 python faster_particles/bin/ppn.py train \
-  --display-dir display/train_uresnet3d \
-  -o /data/train_uresnet3d \
-  -l log/train_uresnet3d \
+  --display-dir display/train_uresnet3d1 \
+  -o /data/train_uresnet3d1 \
+  -l log/train_uresnet3d1 \
   --base-net uresnet \
   --net base \
   --data "/data/dlprod_ppn_v08_p01/train.root" \
+  --test-data "/data/dlprod_ppn_v08_p01/test.root" \
   -N 512 \
   -m 100000 \
   --enable-crop \
   -ss 128 \
-  -3d
+  -3d \
+  -b 4

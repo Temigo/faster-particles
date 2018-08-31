@@ -14,6 +14,7 @@ class BaseNet(object):
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = cfg.LEARNING_RATE
         self.is_3d = cfg.DATA_3D
+        self.cfg = cfg
 
     def init_placeholders(self):
         """

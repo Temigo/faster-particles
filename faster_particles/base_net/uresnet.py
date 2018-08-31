@@ -22,20 +22,20 @@ class UResNet(BaseNet):
         if self.is_3d:
             self.image_placeholder = tf.placeholder(
                 tf.float32,
-                shape=(1, self.N, self.N, self.N, 1),
+                shape=(None, self.N, self.N, self.N, 1),
                 name="image_uresnet") if image is None else image
             self.pixel_labels_placeholder = tf.placeholder(
                 tf.int32,
-                shape=(1, self.N, self.N, self.N),
+                shape=(None, self.N, self.N, self.N),
                 name="image_label") if labels is None else labels
         else:
             self.image_placeholder = tf.placeholder(
                 tf.float32,
-                shape=(1, self.N, self.N, 1),
+                shape=(None, self.N, self.N, 1),
                 name="image_uresnet") if image is None else image
             self.pixel_labels_placeholder = tf.placeholder(
                 tf.int32,
-                shape=(1, self.N, self.N),
+                shape=(None, self.N, self.N),
                 name="image_label") if labels is None else labels
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
         return [
@@ -238,7 +238,7 @@ class UResNet(BaseNet):
                 tf.summary.scalar('loss', self._loss)
                 if is_training:
                     with tf.variable_scope('metrics'):
-                        labels = tf.argmax(net, axis=len(dims),
+                        labels = tf.argmax(net, axis=-1,
                                            output_type=tf.int32)
                         self.accuracy_allpix = tf.reduce_mean(tf.cast(tf.equal(
                             labels,
