@@ -62,7 +62,7 @@ class PPN(object):
             'rois': rois
             }
 
-    def train_step_with_summary(self, sess, blobs):
+    def train_step(self, sess, blobs):
         feed_dict = {
             self.image_placeholder: blobs['data'],
             self.gt_pixels_placeholder: blobs['gt_pixels']

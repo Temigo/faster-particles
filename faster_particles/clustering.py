@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
+from faster_particles.data.larcvdata.larcvdata_generator import LarcvGenerator
 from faster_particles.demo_ppn import get_filelist
 from faster_particles.display_utils import display_original_image, display_gt_pixels
 

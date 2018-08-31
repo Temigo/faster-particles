@@ -7,7 +7,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import os
 import scipy
-from faster_particles.display_utils import display_original_image, display_im_proposals
+from faster_particles.display_utils import display_original_image, \
+                                            display_im_proposals
 
 class PPNMetrics(object):
     def __init__(self, cfg, dim1=8, dim2=4):
@@ -49,11 +50,11 @@ class PPNMetrics(object):
         # self.distances[i][j] = distance between im_proposals_filtered[j] and blob['gt_pixels'][i]
         gt_pixels = blob['gt_pixels'][:, :-1]
         im_proposals = results['im_proposals']
-        
+
         distances_ppn2 = scipy.spatial.distance.cdist(im_proposals, gt_pixels)
         self.ppn2_distances_to_closest_gt.extend(np.amin(distances_ppn2, axis=1))
         self.ppn2_distances_to_closest_pred.extend(np.amin(distances_ppn2, axis=0))
-        
+
         self.ppn2_ambiguity.extend(np.count_nonzero(distances_ppn2 < self.threshold_ambiguity, axis=1))
         self.ppn2_false_positives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_positive, axis=1)) / im_proposals.shape[0])
         self.ppn2_false_negatives.append(np.count_nonzero(np.all(distances_ppn2 > self.threshold_false_negative, axis=0)) / gt_pixels.shape[0])

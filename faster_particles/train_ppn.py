@@ -56,7 +56,7 @@ class Trainer(object):
                 summary, result = self.test_net.test_image(self.sess, blob)
                 summary_writer_test.add_summary(summary, real_step)
             else:
-                summary, result = self.train_net.train_step_with_summary(self.sess, blob)
+                summary, result = self.train_net.train_step(self.sess, blob)
                 summary_writer_train.add_summary(summary, real_step)
             for i in range(len(blob['crops'])):
                 blob_i = {
@@ -92,7 +92,7 @@ class Trainer(object):
                 summary, result = self.test_net.test_image(self.sess, blob)
                 summary_writer_test.add_summary(summary, real_step)
             else:
-                summary, result = self.train_net.train_step_with_summary(self.sess, blob)
+                summary, result = self.train_net.train_step(self.sess, blob)
                 summary_writer_train.add_summary(summary, real_step)
             # print(np.count_nonzero(blob['data']), np.count_nonzero(result['predictions']))
             if is_drawing and self.display is not None:

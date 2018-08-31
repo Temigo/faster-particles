@@ -11,8 +11,8 @@ import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-from faster_particles.toydata.track_generator import generate_toy_tracks
-from faster_particles.toydata.shower_generator import make_shower
+from faster_particles.data.toydata.track_generator import generate_toy_tracks
+from faster_particles.data.toydata.shower_generator import make_shower
 
 class ToydataGenerator(object):
     CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')

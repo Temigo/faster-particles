@@ -17,9 +17,10 @@ from faster_particles.ppn import PPN
 from faster_particles.base_net.uresnet import UResNet
 from faster_particles.base_net import basenets
 from faster_particles.metrics import PPNMetrics
-from faster_particles import ToydataGenerator
-from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
-from faster_particles.hdf5data.hdf5data_generator import HDF5Generator
+# from faster_particles import ToydataGenerator
+# from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
+# from faster_particles.hdf5data.hdf5data_generator import HDF5Generator
+from faster_particles.data import ToydataGenerator, LarcvGenerator, HDF5Generator
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
@@ -193,7 +194,11 @@ def inference_ppn_ext(cfg):
     #crops = tf.train.batch([crops], 1, shapes=[tf.TensorShape((cfg.CROP_SIZE, cfg.CROP_SIZE))], dynamic_pad=True, allow_smaller_final_batch=False, enqueue_many=True)
     net_uresnet = UResNet(cfg=cfg, N=cfg.CROP_SIZE)
     # FIXME remove dependency on labels at test time
-    net_uresnet.init_placeholders(image=tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE, 1)), labels=tf.cast(tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE)), dtype=tf.int32))
+    net_uresnet.init_placeholders(
+        image=tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE, 1)),
+        labels=tf.cast(tf.reshape(crops, (-1, cfg.CROP_SIZE, cfg.CROP_SIZE)),
+                       dtype=tf.int32)
+        )
     net_uresnet.create_architecture(is_training=False, scope='small_uresnet')
     inference = []
     with tf.Session() as sess:

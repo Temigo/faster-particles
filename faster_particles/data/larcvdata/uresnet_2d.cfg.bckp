@@ -1,0 +1,34 @@
+%sIO: {
+  Verbosity:    1
+  EnableFilter: true
+  RandomAccess: 2
+  RandomSeed:   %d
+  InputFiles:   %s
+  ProcessType:  ["EmptyImageFilter","EmptyImageFilter","BatchFillerImage2D","BatchFillerImage2D"]
+  ProcessName:  ["EmptyImageFilterData","EmptyImageFilterLabel","%s_data","%s_labels"]
+  NumThreads: 1
+  NumBatchStorage: 1
+
+  ProcessList: {
+		EmptyImageFilterData: {
+			Verbosity: 3
+			ImageProducer: "st_data_projection0"
+		}
+		EmptyImageFilterLabel: {
+			Verbosity: 3
+			ImageProducer: "st_segment_projection0"
+		}
+    %s_data: {
+      Verbosity: 3
+      ImageProducer: "st_data_projection0"
+      Channels: [0]
+			AllowEmpty: true
+    }
+    %s_labels: {
+      Verbosity: 3
+      ImageProducer: "st_segment_projection0"
+      Channels: [0]
+			AllowEmpty: true
+    }
+  }
+}

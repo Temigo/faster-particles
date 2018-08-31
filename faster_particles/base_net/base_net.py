@@ -14,6 +14,7 @@ class BaseNet(object):
         self.num_classes = cfg.NUM_CLASSES
         self.learning_rate = cfg.LEARNING_RATE
         self.is_3d = cfg.DATA_3D
+        self.dim = 3 if self.is_3d else 2
         self.cfg = cfg
 
     def init_placeholders(self):
@@ -41,7 +42,7 @@ class BaseNet(object):
         """
         raise NotImplementedError
 
-    def train_step_with_summary(self, sess, blobs):
+    def train_step(self, sess, blobs):
         """
         Run training step.
         @param sess Tensorflow current session.

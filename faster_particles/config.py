@@ -46,6 +46,7 @@ class PPNConfig(object):
     WEIGHT_LOSS = False
     MIN_SCORE = 0.0
     POSTPROCESSING = 'nms'  # Postprocessing: use either NMS or DBSCAN
+    URESNET_WEIGHTING = False  # Use pixel-weighting scheme in UResNet
 
     # Data configuration
     BATCH_SIZE = 1
@@ -145,6 +146,7 @@ class PPNConfig(object):
         parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
         parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
         parser.add_argument("-hdf5", "--hdf5", action='store_true', default=self.HDF5, help="Use HDF5 data file reader.")
+        parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UREsNet.")
 
     def parse_args(self):
         args = self.parser.parse_args()

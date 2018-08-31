@@ -18,38 +18,39 @@ class UResNet(BaseNet):
         self._num_strides = 3  # 4
 
     def init_placeholders(self, image=None, labels=None):
-        # FIXME Assumes batch_size of 1
-        if self.is_3d:
-            self.image_placeholder = tf.placeholder(
+        self.image_placeholder = tf.placeholder(
+            tf.float32,
+            shape=(None,) + (self.N,) * self.dim + (1,),
+            name="image_uresnet") if image is None else image
+        self.pixel_labels_placeholder = tf.placeholder(
+            tf.int32,
+            shape=(None,) + (self.N,) * self.dim,
+            name="image_label") if labels is None else labels
+        if self.cfg.URESNET_WEIGHTING:
+            self.pixel_weight_placeholder = tf.placeholder(
                 tf.float32,
-                shape=(None, self.N, self.N, self.N, 1),
-                name="image_uresnet") if image is None else image
-            self.pixel_labels_placeholder = tf.placeholder(
-                tf.int32,
-                shape=(None, self.N, self.N, self.N),
-                name="image_label") if labels is None else labels
-        else:
-            self.image_placeholder = tf.placeholder(
-                tf.float32,
-                shape=(None, self.N, self.N, 1),
-                name="image_uresnet") if image is None else image
-            self.pixel_labels_placeholder = tf.placeholder(
-                tf.int32,
-                shape=(None, self.N, self.N),
-                name="image_label") if labels is None else labels
+                shape=(None,) + (self.N,) * self.dim,
+                name="image_weight"
+            )
         self.learning_rate_placeholder = tf.placeholder(tf.float32, name="lr")
-        return [
+        placeholders = [
             ("image_placeholder", "image_uresnet"),
             ("learning_rate_placeholder", "lr"),
             ("pixel_labels_placeholder", "image_label")
             ]
+        if self.cfg.URESNET_WEIGHTING:
+            placeholders.append(("pixel_weight_placeholder", "image_weight"))
+        return placeholders
 
     def feed_dict(self, blob):
-        return {
+        d = {
             self.image_placeholder: blob['data'],
             self.pixel_labels_placeholder: blob['labels'],
             self.learning_rate_placeholder: self.learning_rate
             }
+        if self.cfg.URESNET_WEIGHTING:
+            d[self.pixel_weight_placeholder] = blob['weight']
+        return d
 
     def test_image(self, sess, blob):
         predictions, scores, summary = sess.run([
@@ -58,7 +59,7 @@ class UResNet(BaseNet):
             self.summary_op], feed_dict=self.feed_dict(blob))
         return summary, {'predictions': predictions, 'scores': scores}
 
-    def train_step_with_summary(self, sess, blobs):
+    def train_step(self, sess, blobs):
         _, summary, scores, predictions = sess.run([
             self.train_op,
             self.summary_op,
@@ -231,6 +232,9 @@ class UResNet(BaseNet):
                 #     tf.reshape(self._loss,
                 #                [-1, int(np.prod(dims) / dims[-1])]
                 #                ), axis=1), name="loss")
+                if self.cfg.URESNET_WEIGHTING:
+                    self._loss = tf.multiply(self._loss,
+                                             self.pixel_weight_placeholder)
                 self._loss = tf.reduce_mean(tf.reduce_sum(
                     tf.reshape(self._loss, [-1, int(np.prod(dims))]),
                     axis=1), name="loss"
