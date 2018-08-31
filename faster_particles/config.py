@@ -76,7 +76,7 @@ class PPNConfig(object):
     SHOWER_OUT_PNG = False
 
     # Environment variables
-    CUDA_VISIBLE_DEVICES = '3'
+    CUDA_VISIBLE_DEVICES = '1'
 
     def __init__(self):
         self.create_parsers()
@@ -155,6 +155,8 @@ class PPNConfig(object):
             args.func = train_small_uresnet
         elif self.NET == 'ppn_ext' and args.script == 'demo':
             args.func = inference_ppn_ext
+        elif self.NET == 'full' and args.script == 'demo':
+            args.func = inference_full
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights without loading any checkpoint file.")
 

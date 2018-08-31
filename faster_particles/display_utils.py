@@ -194,7 +194,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # --- FIGURE 1 : PPN1 ROI ---
     fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
+    display_original_image(blob, cfg, ax, vmin=0, vmax=100)
     display_gt_pixels(cfg, ax, blob['gt_pixels'])
     display_rois(cfg, ax, rois, dim1, dim2)
     set_image_limits(cfg, ax)
@@ -205,7 +205,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     # --- FIGURE 2 : PPN2 predictions ---
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax2, vmin=0, vmax=1, cmap='jet')
+    display_original_image(blob, cfg, ax2, vmin=0, vmax=100, cmap='jet')
     im_proposals = display_im_proposals(cfg, ax2, im_proposals, im_scores, im_labels)
     set_image_limits(cfg, ax2)
     #plt.show()

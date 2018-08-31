@@ -18,19 +18,23 @@ coord1 = 0 #shared coordinate is first index in first array
 coord2 = 1 #shared coordinate is second index in second array
 proposals_all = []
 truth_all = []
-directory = './multichannel/demo_' + str(score_threshold) + '/'
+
+directory = './multichannel/demo_pdecay_' + str(score_threshold) + '/'
+# directory = './multichannel/demo_' + str(score_threshold) + '/'
 
 for distance_threshold in distance_threshold_array: #a proposal farther than this from any proposal in another channel is removed
     #TODO: make more object-oriented... would reduce lines of code by half probably
     channel1 = str(score_threshold)
-    display_dir1 = '../display/demo_' + channel1 + '/metrics'
+    display_dir1 = '../display/demo_pdecay_' + channel1 + '/metrics'
+    #display_dir1 = '../display/demo_' + channel1 + '/metrics'
     labels1 = np.load(display_dir1 + '/ppn2_labels.npy') # 10000 by (numproposals) by 1
     proposals1 = np.load(display_dir1 + '/ppn2_proposals.npy') # 10000 by (numproposals) by 2
     scores1 = np.load(display_dir1 + '/ppn2_scores.npy') # 10000 by (numproposals) by 1
     truth1 = np.load(display_dir1 + '/ppn2_truth.npy') # 10000 by (numproposals) by 1
 
     channel2 = str(score_threshold) + '_channel'
-    display_dir2 = '../display/demo_' + channel2 + '/metrics'
+    display_dir2 = '../display/demo_pdecay_' + channel2 + '/metrics'
+    #display_dir2 = '../display/demo_' + channel2 + '/metrics'
     labels2 = np.load(display_dir2 + '/ppn2_labels.npy') # 10000 by (numproposals) by 1
     proposals2 = np.load(display_dir2 + '/ppn2_proposals.npy') # 10000 by (numproposals) by 2
     scores2 = np.load(display_dir2 + '/ppn2_scores.npy') # 10000 by (numproposals) by 1

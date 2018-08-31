@@ -24,8 +24,9 @@
 python faster_particles/bin/ppn.py demo \
 	--display-dir display/demo_ppn \
 	--base-net uresnet \
-	--net ppn \
-	--weights-file-ppn /data/run_ppn_uresnet_corrected9/model-100000.ckpt \
-	--image-size 512 \
-	--max-steps 10000 \
-	--data "/data/fuckgrid/fuckgrid/p*/larcv.root"
+	--net full \
+	--weights-file-base "/data/train_slicing2/model-70000.ckpt" \
+	--weights-file-ppn "/data/run_ppn_uresnet_corrected9/model-100000.ckpt" \
+	--image-size 384 \
+	--max-steps 10 \
+	--data "../mix.root"

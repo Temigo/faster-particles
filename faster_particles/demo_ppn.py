@@ -78,12 +78,13 @@ def inference_simple(cfg, blobs, net, num_test=10):
 def inference_full(cfg):
     #if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
     #    raise Exception("Need both weights files for full inference.")
-
+    cfg.DISPLAY_DIR = 'display/demo_pdecay_full_' + str(cfg.PPN1_SCORE_THRESHOLD)
+    
     num_test = cfg.MAX_STEPS
     inference_base, inference_ppn, blobs = [], [], []
     weights_file_ppn = cfg.WEIGHTS_FILE_PPN
     print("Retrieving data...")
-    data = get_data(cfg)
+    data = get_data(cfg, 1)
     for i in range(num_test):
         blobs.append(data.forward())
     print("Done.")
@@ -222,10 +223,10 @@ def inference_ppn_ext(cfg):
             cfg.IMAGE_SIZE = N
 
 def inference(cfg):
-    #data1 = get_data(cfg, 1)
-    #cfg.DISPLAY_DIR = 'display/demo_' + str(cfg.PPN1_SCORE_THRESHOLD)
+#     data1 = get_data(cfg, 1)
+#     cfg.DISPLAY_DIR = 'display/demo_pdecay_' + str(cfg.PPN1_SCORE_THRESHOLD)
     data1 = get_data(cfg, 2)
-    cfg.DISPLAY_DIR = 'display/demo_' + str(cfg.PPN1_SCORE_THRESHOLD) + '_channel'
+    cfg.DISPLAY_DIR = 'display/demo_pdecay_' + str(cfg.PPN1_SCORE_THRESHOLD) + '_channel'
 
     is_ppn = cfg.NET == 'ppn'
     if is_ppn:
