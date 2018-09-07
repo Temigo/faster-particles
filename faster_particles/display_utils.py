@@ -122,7 +122,8 @@ def display_gt_pixels(cfg, ax, gt_pixels):
 
 
 def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
-                    name='display', directory='', vmin=0, vmax=400):
+                    name='display', directory='', vmin=0, vmax=400,
+                    softmax=None):
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:
@@ -146,8 +147,8 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
     ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
     blob_label = {}
     if cfg.DATA_3D:
-        blob_label['data'] = blob['labels'][0,...]
-        blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
+        blob_label['data'] = blob['labels'][0, ...]
+        blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0, ...])
     else:
         blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
     display_original_image(blob_label, cfg, ax2, vmax=np.unique(blob_label['data']).shape[0]-1, cmap='tab10')
@@ -161,8 +162,8 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
         ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
         blob_pred = {}
         if cfg.DATA_3D:
-            blob_pred['data'] = predictions[0,...]
-            blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0,...])
+            blob_pred['data'] = predictions[0, ...]
+            blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0, ...])
         else:
             blob_pred['data'] = predictions[:, :, :, np.newaxis]
         display_original_image(blob_pred, cfg, ax3, vmax=3.1)

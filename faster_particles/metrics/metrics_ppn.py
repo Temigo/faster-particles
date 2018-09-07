@@ -9,9 +9,12 @@ import os
 import scipy
 from faster_particles.display_utils import display_original_image, \
                                             display_im_proposals
+from faster_particles.metrics.metrics import Metrics
 
-class PPNMetrics(object):
+
+class PPNMetrics(Metrics):
     def __init__(self, cfg, dim1=8, dim2=4):
+        super(PPNMetrics, self).__init__(cfg)
         self.im_labels = []
         self.im_scores = []
         self.im_proposals = []
@@ -30,10 +33,6 @@ class PPNMetrics(object):
         self.ppn2_false_negatives = []
         self.ppn2_outliers = []
 
-        self.cfg = cfg
-        self.dir = os.path.join(cfg.DISPLAY_DIR, 'metrics')
-        if not os.path.isdir(self.dir):
-            os.makedirs(self.dir)
         self.dim1, self.dim2 = dim1, dim2
         self.threshold_ambiguity = 10
         self.threshold_false_positive = 15
@@ -112,27 +111,6 @@ class PPNMetrics(object):
         self.plot_ratio_gt_points_roi()
         #self.ppn2_distance_to_nearest_neighbour()
         print("Mean of PPN2 distances to closest gt = ", np.mean(self.ppn2_distances_to_closest_gt))
-
-    def make_plot(self, data, bins=None, xlabel="", ylabel="", filename=""):
-        """
-        If bins is None: discrete histogram
-        """
-        data = np.array(data)
-        if bins is None:
-            a = np.diff(np.unique(data))
-            if len(a) > 0:
-                d = a.min()
-                left_of_first_bin = data.min() - float(d)/2
-                right_of_last_bin = data.max() + float(d)/2
-                bins = np.arange(left_of_first_bin, right_of_last_bin + d, d)
-            else:
-                bins = 100
-
-        plt.hist(data, bins)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.savefig(os.path.join(self.dir, filename))
-        plt.gcf().clear()
 
     def gt_points_per_roi(self, gt_pixels, rois):
         gt_points_per_roi_list = []

@@ -14,7 +14,7 @@ class Probabilistic(CroppingAlgorithm):
         n = coords.shape[0]
         proba = np.ones((n)) / n
         i = 0
-        max_patches = 100
+        max_patches = 100  # FIXME best value?
         patches = []  # List of center coordinates of patches dxd
         voxel_num_boxes = np.zeros_like(proba)
         while np.count_nonzero(voxel_num_boxes < 2) > 0 and i < max_patches:

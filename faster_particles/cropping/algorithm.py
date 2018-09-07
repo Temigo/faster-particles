@@ -48,7 +48,11 @@ class CroppingAlgorithm(object):
             # print(np.nonzero(blob['data']))
             # print(np.nonzero(blob['labels']))
             # assert np.array_equal(np.nonzero(blob['data']), np.nonzero(blob['labels']))
-
+            if 'weight' in original_blob:
+                blob['weight'], _ = crop_util(np.array([patch_center]),
+                                              self.cfg.SLICE_SIZE,
+                                              original_blob['weight'][..., np.newaxis])
+                blob['weight'] = blob['weight'][..., 0]
 
 
             # Select gt pixels
@@ -81,4 +85,4 @@ class CroppingAlgorithm(object):
             if self.cfg.NET not in ['ppn', 'ppn_ext', 'full'] or len(blob['gt_pixels']) > 0:
                 batch_blobs.append(blob)
 
-        return batch_blobs
+        return batch_blobs, patch_centers, patch_sizes

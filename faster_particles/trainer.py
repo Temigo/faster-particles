@@ -9,11 +9,8 @@ import tensorflow as tf
 import os
 import numpy as np
 
-from faster_particles.ppn import PPN
-from faster_particles.demo_ppn import load_weights, get_data
-from faster_particles.display_utils import display, display_uresnet, \
-                                            display_ppn_uresnet
-from faster_particles.base_net import basenets
+from faster_particles.demo_ppn import load_weights
+from faster_particles.display_utils import extract_voxels
 from faster_particles.cropping import cropping_algorithms
 
 
@@ -94,7 +91,7 @@ class Trainer(object):
             else:
                 summary, result = self.train_net.train_step(self.sess, blob)
                 summary_writer_train.add_summary(summary, real_step)
-            # print(np.count_nonzero(blob['data']), np.count_nonzero(result['predictions']))
+
             if is_drawing and self.display is not None:
                 print('Drawing...')
                 if self.cfg.NET == 'ppn':
@@ -119,7 +116,9 @@ class Trainer(object):
                                    os.path.join(self.outputdir,
                                                 "model-%d.ckpt" % real_step))
             print("Wrote %s" % save_path)
-        return real_step
+            print("Memory usage: ", self.sess.run(tf.contrib.memory_stats.MaxBytesInUse()))
+
+        return real_step, result
 
     def train(self, net_args, scope="ppn"):
         print("Creating net architecture...")
@@ -154,9 +153,9 @@ class Trainer(object):
 
         step = 0
         crop_algorithm = cropping_algorithms[self.cfg.CROP_ALGO](self.cfg)
-        if self.cfg.ENABLE_CROP:
-            self.batch_size = self.cfg.BATCH_SIZE
-            self.cfg.BATCH_SIZE = 1
+
+        self.batch_size = self.cfg.BATCH_SIZE
+        self.cfg.BATCH_SIZE = 1
 
         print("Start training...")
         real_step = 0
@@ -168,62 +167,54 @@ class Trainer(object):
                 blob = self.train_toydata.forward()
 
             # Cropping pre-processing
+            patch_centers, patch_sizes = None, None
             if self.cfg.ENABLE_CROP:
-                batch_blobs = crop_algorithm.process(blob)
+                batch_blobs, patch_centers, patch_sizes = crop_algorithm.process(blob)
             else:
                 batch_blobs = [blob]
 
             i = 0
+            batch_results = []
             while i < len(batch_blobs):
                 blobs = batch_blobs[i:min(i+self.batch_size, len(batch_blobs))]
                 blob = {}
                 for key in blobs[0]:
                     blob[key] = np.concatenate([b[key] for b in blobs])
 
-                i += len(blob)
-                real_step = self.process_blob(i, blob, real_step, saver,
-                                              is_testing, summary_writer_train,
-                                              summary_writer_test)
+                i += len(blobs)
+                real_step, result = self.process_blob(i, blob, real_step,
+                                                      saver, is_testing,
+                                                      summary_writer_train,
+                                                      summary_writer_test)
+                """for j in range(len(blobs)):
+                    r = {}
+                    for key in result:
+                        r[key] = result[key][j]
+                    batch_results.append(r)"""
+
+            # Reconcile slices result together
+            # using batch_results, batch_blobs, patch_centers and patch_sizes
+            """final_results = {}
+            # UResNet predictions
+            if 'predictions' and 'scores' in batch_results[0]:
+                final_voxels = []  # Shape N_voxels x dim
+                final_scores = []  # Shape N_voxels x num_classes
+                final_counts = []  # Shape N_voxels x 1
+                for i, blob in enumerate(batch_blobs):
+                    result = batch_results[i]
+                    v = extract_voxels(result['predictions'])  # Shape N_voxels x dim
+                    scores = result['softmax'][v]  # Shape N_voxels x num_classes
+                    # indices are  indices of the *first* occurrences of the unique values
+                    # hence for doublons they are indices in final_voxels
+                    final_voxels, indices, counts = np.unique(np.concatenate([final_voxels, v], axis=0), axis=0, return_index=True, return_counts=True)
+                    final_scores = np.concatenate([final_scores, scores], axis=0)[indices]
+                    final_counts = np.concatenate([final_counts, np.ones_like(v)], axis=0)[indices] + counts - 1
+                final_scores = final_scores / final_counts  # Compute average
+                final_predictions = np.argmax(final_scores, axis=1)
+                final_results['predictions'] = final_predictions
+                final_results['scores'] = final_scores[final_predictions]
+                final_results['softmax'] = final_scores"""
+
         summary_writer_train.close()
         summary_writer_test.close()
         print("Done.")
-
-
-def train_ppn(cfg):
-    """
-    Launch PPN training with appropriate dataset and base layers.
-    """
-    train_data, test_data = get_data(cfg)
-    net_args = {"base_net": basenets[cfg.BASE_NET], "base_net_args": {}}
-    display_util = display if cfg.NET == 'ppn' else display_ppn_uresnet
-    t = Trainer(PPN, train_data, test_data, cfg, display_util=display_util)
-    t.train(net_args)
-
-
-def train_classification(cfg):
-    """
-    Launch training of the base network (e.g. VGG or UResNet).
-    """
-    train_data, test_data = get_data(cfg)
-    net_args = {}
-    display_util = display_uresnet if cfg.BASE_NET == 'uresnet' else None
-    t = Trainer(basenets[cfg.BASE_NET],
-                train_data,
-                test_data,
-                cfg,
-                display_util=display_util)
-    t.train(net_args, scope=cfg.BASE_NET)
-
-
-def train_small_uresnet(cfg):
-    """
-    Launch training of the small UResNet.
-    """
-    train_data, test_data = get_data(cfg)
-    t = Trainer(basenets[cfg.BASE_NET],
-                train_data,
-                test_data,
-                cfg,
-                display_util=display_uresnet)
-    net_args = {"N": cfg.CROP_SIZE}
-    t.train(net_args, scope="small_uresnet")

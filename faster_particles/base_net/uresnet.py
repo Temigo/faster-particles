@@ -14,7 +14,7 @@ class UResNet(BaseNet):
             self.fn_conv_transpose = slim.conv3d_transpose
 
         self.conv_feature_map = {}
-        self.base_num_outputs = 16
+        self.base_num_outputs = cfg.BASE_NUM_OUTPUTS
         self._num_strides = 3  # 4
 
     def init_placeholders(self, image=None, labels=None):
@@ -53,19 +53,29 @@ class UResNet(BaseNet):
         return d
 
     def test_image(self, sess, blob):
-        predictions, scores, summary = sess.run([
+        predictions, scores, softmax, summary = sess.run([
             self._predictions,
             self._scores,
+            self._softmax,
             self.summary_op], feed_dict=self.feed_dict(blob))
-        return summary, {'predictions': predictions, 'scores': scores}
+        return summary, {
+            'predictions': predictions,
+            'scores': scores,
+            'softmax': softmax
+        }
 
     def train_step(self, sess, blobs):
-        _, summary, scores, predictions = sess.run([
+        _, summary, scores, softmax, predictions = sess.run([
             self.train_op,
             self.summary_op,
             self._scores,
+            self._softmax,
             self._predictions], feed_dict=self.feed_dict(blobs))
-        return summary, {'predictions': predictions, 'scores': scores}
+        return summary, {
+            'predictions': predictions,
+            'scores': scores,
+            'softmax': softmax
+        }
 
     def resnet_module(self, input_tensor, num_outputs, trainable=True,
                       kernel=(3, 3), stride=1, scope='noscope'):
@@ -193,9 +203,13 @@ class UResNet(BaseNet):
                                                 scope       = 'deconv%d' % step,
                                                 biases_initializer = None)
 
-                    net = tf.concat([net, self.conv_feature_map[num_outputs]],
-                                    axis=len(net.shape)-1,
-                                    name='concat%d' % step)
+                    if self.cfg.URESNET_ADD:
+                        net = tf.add(net, self.conv_feature_map[num_outputs],
+                                     name='add%d' % step)
+                    else:
+                        net = tf.concat([net, self.conv_feature_map[num_outputs]],
+                                        axis=len(net.shape)-1,
+                                        name='concat%d' % step)
                     net = self.double_resnet(input_tensor = net,
                                         num_outputs  = num_outputs,
                                         kernel       = 3,

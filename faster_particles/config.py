@@ -5,7 +5,7 @@ import tensorflow as tf
 
 
 from demo_ppn import inference, inference_full, inference_ppn_ext
-from train_ppn import train_ppn, train_classification, train_small_uresnet
+from train_net import train
 
 
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
@@ -19,6 +19,7 @@ class PPNConfig(object):
     IMAGE_SIZE = 768  # 512
     CROP_SIZE = 24
     SLICE_SIZE = 64
+    CORE_SIZE = 32
     ENABLE_CROP = False
     CROP_ALGO = "proba"
     HDF5 = False
@@ -28,6 +29,7 @@ class PPNConfig(object):
     DISPLAY_DIR = "display"
 
     NUM_CLASSES = 3  # For base network only
+    BASE_NUM_OUTPUTS = 16  # For UResNet
     R = 20
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
@@ -47,6 +49,7 @@ class PPNConfig(object):
     MIN_SCORE = 0.0
     POSTPROCESSING = 'nms'  # Postprocessing: use either NMS or DBSCAN
     URESNET_WEIGHTING = False  # Use pixel-weighting scheme in UResNet
+    URESNET_ADD = False  # Whether to use add or concat in UResNet
 
     # Data configuration
     BATCH_SIZE = 1
@@ -107,7 +110,7 @@ class PPNConfig(object):
 
         self.demo_parser.set_defaults(func=inference)
         self.demo_full_parser.set_defaults(func=inference_full)
-        self.train_parser.set_defaults(func=train_ppn)
+        self.train_parser.set_defaults(func=train)
 
     def common_arguments(self, parser):
         parser.add_argument("-m", "--max-steps", default=self.MAX_STEPS, type=int, help="Maximum number of training iterations.")
@@ -142,11 +145,14 @@ class PPNConfig(object):
         parser.add_argument("-ni", "--next-index", default=self.NEXT_INDEX, type=int, help="Index from which to start reading LArCV data file.")
         parser.add_argument("-ec", "--enable-crop", default=self.ENABLE_CROP, action='store_true', help="Crop original data to smaller windows.")
         parser.add_argument("-ss", "--slice-size", action='store', default=self.SLICE_SIZE, type=int, help="Width (and height) of cropped slice from image.")
+        parser.add_argument("-cos", "--core-size", action='store', default=self.CORE_SIZE, type=int, help="Width (and height) of the core of a cropped slice from image.")
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
         parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
         parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
         parser.add_argument("-hdf5", "--hdf5", action='store_true', default=self.HDF5, help="Use HDF5 data file reader.")
-        parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UREsNet.")
+        parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UResNet.")
+        parser.add_argument("-ua", "--uresnet-add", action='store_true', default=self.URESNET_ADD, help="Use add instead of concat in UResNet.")
+        parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")
 
     def parse_args(self):
         args = self.parser.parse_args()
@@ -155,11 +161,7 @@ class PPNConfig(object):
         for v in vars(self):
             print("%s = %r" % (v, getattr(self, v)))
         print("\n\n")
-        if self.NET == 'base' and args.script == 'train':
-            args.func = train_classification
-        elif self.NET == 'small_uresnet' and args.script == 'train':
-            args.func = train_small_uresnet
-        elif self.NET == 'ppn_ext' and args.script == 'demo':
+        if self.NET == 'ppn_ext' and args.script == 'demo':
             args.func = inference_ppn_ext
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights \

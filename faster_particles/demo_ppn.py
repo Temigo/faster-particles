@@ -16,11 +16,12 @@ from faster_particles.display_utils import display, display_uresnet, \
 from faster_particles.ppn import PPN
 from faster_particles.base_net.uresnet import UResNet
 from faster_particles.base_net import basenets
-from faster_particles.metrics import PPNMetrics
+from faster_particles.metrics import PPNMetrics, UResNetMetrics
 # from faster_particles import ToydataGenerator
 # from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
 # from faster_particles.hdf5data.hdf5data_generator import HDF5Generator
 from faster_particles.data import ToydataGenerator, LarcvGenerator, HDF5Generator
+from faster_particles.cropping import cropping_algorithms
 
 CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
@@ -103,7 +104,7 @@ def inference_full(cfg):
     inference_base, inference_ppn, blobs = [], [], []
     weights_file_ppn = cfg.WEIGHTS_FILE_PPN
     print("Retrieving data...")
-    data = get_data(cfg)
+    _, data = get_data(cfg)
     for i in range(num_test):
         blobs.append(data.forward())
     print("Done.")
@@ -178,7 +179,7 @@ def inference_ppn_ext(cfg):
     inference_ppn, blobs = [], []
 
     print("Retrieving data...")
-    data = get_data(cfg)
+    _, data = get_data(cfg)
     for i in range(num_test):
         blobs.append(data.forward())
     print("Done.")
@@ -252,8 +253,17 @@ def inference_ppn_ext(cfg):
 
 
 def inference(cfg):
-    data = get_data(cfg)
+    """
+    Inference for either PPN or (xor) base network (e.g. UResNet)
+    """
+    if not os.path.isdir(cfg.DISPLAY_DIR):
+        os.makedirs(cfg.DISPLAY_DIR)
+
+    _, data = get_data(cfg)
+
     is_ppn = cfg.NET == 'ppn'
+    is_uresnet = cfg.BASE_NET == 'uresnet' and cfg.NET == 'base'
+
     if is_ppn:
         net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
         if cfg.WEIGHTS_FILE_PPN is None:
@@ -267,38 +277,60 @@ def inference(cfg):
     net.init_placeholders()
     net.create_architecture(is_training=False)
     duration = 0
+
     if is_ppn:
         metrics = PPNMetrics(cfg, dim1=net.dim1, dim2=net.dim2)
+    elif is_uresnet:
+        metrics = UResNetMetrics(cfg)
+
+    crop_algorithm = cropping_algorithms[cfg.CROP_ALGO](cfg)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         load_weights(cfg, sess)
-
+        real_step = 0
         for i in range(cfg.MAX_STEPS):
             print("%d/%d" % (i, cfg.MAX_STEPS))
             blob = data.forward()
-            start = time.time()
-            summary, results = net.test_image(sess, blob)
-            end = time.time()
-            duration += end - start
-            if is_ppn:
-                display(
-                    blob,
-                    cfg,
-                    index=i,
-                    dim1=net.dim1,
-                    dim2=net.dim2,
-                    directory=os.path.join(cfg.DISPLAY_DIR, 'demo'),
-                    **results
-                )
-                metrics.add(blob, results)
+            # Cropping pre-processing
+            patch_centers, patch_sizes = None, None
+            if cfg.ENABLE_CROP:
+                batch_blobs, patch_centers, patch_sizes = crop_algorithm.process(blob)
             else:
-                if cfg.BASE_NET == 'uresnet':
-                    display_uresnet(blob, cfg, index=i, **results)
+                batch_blobs = [blob]
+
+            for j, blob in enumerate(batch_blobs):
+                real_step += 1
+                print(j)
+                start = time.time()
+                summary, results = net.test_image(sess, blob)
+                end = time.time()
+                duration += end - start
+                # Drawing time
+                if cfg.ENABLE_CROP:
+                    N = cfg.IMAGE_SIZE
+                    cfg.IMAGE_SIZE = cfg.SLICE_SIZE
+                if is_ppn:
+                    display(
+                        blob,
+                        cfg,
+                        index=real_step,
+                        dim1=net.dim1,
+                        dim2=net.dim2,
+                        directory=os.path.join(cfg.DISPLAY_DIR, 'demo'),
+                        **results
+                    )
+                    metrics.add(blob, results)
+                elif is_uresnet:
+                    display_uresnet(blob, cfg, index=real_step, **results)
+                    metrics.add(blob, results)
                 else:
                     print(blob, results)
+                if cfg.ENABLE_CROP:
+                    cfg.IMAGE_SIZE = N
+
     duration /= cfg.MAX_STEPS
     print("Average duration of inference = %f ms" % duration)
-    if is_ppn:
+    if is_ppn or is_uresnet:
         metrics.plot()
 
 

@@ -24,4 +24,5 @@ python faster_particles/bin/ppn.py train \
 	--freeze \
 	--image-size 512 \
 	--max-steps 10 \
-	--data "/data/dlprod_ppn_v08_p01/train.root"
+	--data "/data/dlprod_ppn_v08_p01/train_p01.root" \
+  --test-data "/data/dlprod_ppn_v08_p01/test_p01.root"
