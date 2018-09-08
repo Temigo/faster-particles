@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 from faster_particles.metrics.metrics import Metrics
+import os
 
 
 class UResNetMetrics(Metrics):
@@ -75,7 +76,7 @@ class UResNetMetrics(Metrics):
     def plot(self):
         # Save data
         np.savetxt(os.path.join(self.dir, "acc_all.csv"), self.acc_all, delimiter=",")
-        np.savetxt(os.path.join(self.dir, "acc_nonzero.csv"), self.acc_nozero, delimiter=",")
+        np.savetxt(os.path.join(self.dir, "acc_nonzero.csv"), self.acc_nonzero, delimiter=",")
         np.savetxt(os.path.join(self.dir, "label_softmax_mean.csv"), self.label_softmax_mean, delimiter=",")
         np.savetxt(os.path.join(self.dir, "label_softmax_std.csv"), self.label_softmax_std, delimiter=",")
         np.savetxt(os.path.join(self.dir, "num_voxels.csv"), self.num_voxels, delimiter=",")
@@ -97,6 +98,9 @@ class UResNetMetrics(Metrics):
         self.plot_class_acc()
         self.plot_class_score_mean()
         self.plot_class_score_std()
+        print("Min, max and mean accuracy = %f, %f, %f" % (np.amin(self.acc_nonzero), np.amax(self.acc_nonzero), np.mean(self.acc_nonzero)))
+        print("80-percentile = %f" % np.percentile(self.acc_nonzero, 80))
+        print("50-percentile (median) = %f" % np.median(self.acc_nonzero))
 
     def plot_acc_all(self):
         self.make_plot(
@@ -178,7 +182,7 @@ class UResNetMetrics(Metrics):
                 bins=20,
                 xlabel="Accuracy for class %d" % class_label,
                 ylabel="#Images",
-                filename='class_acc.png'
+                filename='class_acc_%d.png' % class_label
             )
 
     def plot_class_score_mean(self):
@@ -188,7 +192,7 @@ class UResNetMetrics(Metrics):
                 bins=20,
                 xlabel="Mean score for class %d" % class_label,
                 ylabel="#Images",
-                filename='class_score_mean.png'
+                filename='class_score_mean_%d.png' % class_label
             )
 
     def plot_class_score_std(self):
@@ -198,5 +202,5 @@ class UResNetMetrics(Metrics):
                 bins=20,
                 xlabel="Std of score for class %d" % class_label,
                 ylabel="#Images",
-                filename='class_score_std.png'
+                filename='class_score_std_%d.png' % class_label
             )

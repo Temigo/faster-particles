@@ -247,8 +247,9 @@ class UResNet(BaseNet):
                 #                [-1, int(np.prod(dims) / dims[-1])]
                 #                ), axis=1), name="loss")
                 if self.cfg.URESNET_WEIGHTING:
+                    pixel_weight = self.pixel_weight_placeholder / tf.reduce_sum(self.pixel_weight_placeholder, axis=range(1, len(dims) + 1), keepdims=True)
                     self._loss = tf.multiply(self._loss,
-                                             self.pixel_weight_placeholder)
+                                             pixel_weight)
                 self._loss = tf.reduce_mean(tf.reduce_sum(
                     tf.reshape(self._loss, [-1, int(np.prod(dims))]),
                     axis=1), name="loss"

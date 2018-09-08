@@ -20,11 +20,12 @@ python faster_particles/bin/ppn.py train \
   -l log/train_uresnet3d1 \
   --base-net uresnet \
   --net base \
-  --data "/data/dlprod_ppn_v08_p01/train.root" \
-  --test-data "/data/dlprod_ppn_v08_p01/test.root" \
+  --uresnet-weighting \
+  --data "/data/dlprod_ppn_v08_p01_filtered/train_p01.root" \
+  --test-data "/data/dlprod_ppn_v08_p01_filtered/test_p01.root" \
   -N 512 \
-  -m 100000 \
+  -m 1 \
   --enable-crop \
-  -ss 128 \
+  -ss 64 \
   -3d \
-  -b 4
+  --gpu '0'

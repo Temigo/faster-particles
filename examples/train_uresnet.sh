@@ -20,5 +20,5 @@ python faster_particles/bin/ppn.py train \
 	--net base \
 	--image-size 512 \
 	--max-steps 10 \
-	--data "/data/dlprod_ppn_v08_p01/train_p01.root" \
-  --test-data "/data/dlprod_ppn_v08_p01/test_p01.root"	
+	--data "/data/dlprod_ppn_v08_p01_filtered/train_p01.root" \
+  --test-data "/data/dlprod_ppn_v08_p01_filtered/test_p01.root"	

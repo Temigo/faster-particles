@@ -38,9 +38,9 @@ def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
         colors = lambda i,j,k : matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap).to_rgba(blob['data'][0, i, j, k, 0])
         for i, voxel in enumerate(blob['voxels']):
             if 'voxels_value' in blob:
-                if blob['voxels_value'][i] == 1: # track
+                if blob['voxels_value'][i] == 1:  # track
                     draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='teal', alpha=1.0, linewidths=0.0, edgecolors='black')
-                elif blob['voxels_value'][i] == 2: # shower
+                elif blob['voxels_value'][i] == 2:  # shower
                     draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='gold', alpha=1.0, linewidths=0.0, edgecolors='black')
                 else:
                     draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='black', alpha=0.3, linewidths=0.0, edgecolors='black')
@@ -157,7 +157,26 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
     plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')
     plt.close(fig2)
 
+    if 'weight' in blob:
+        print("-- Weights:")
+        blob['weight'][blob['weight'] <= 1.0] = 0.0
+        fig5 = plt.figure()
+        ax5 = fig5.add_subplot(111, aspect='equal', **kwargs)
+        blob_weight = {}
+        if cfg.DATA_3D:
+            blob_weight['data'] = blob['weight'][0, ...]
+            blob_weight['voxels'], blob_weight['voxels_value'] = extract_voxels(blob['weight'][0, ...])
+        else:
+            blob_weight['data'] = blob['weight'][:, :, :, np.newaxis]
+        display_original_image(blob_weight, cfg, ax5, vmax=np.maximum(blob['weight']))
+        set_image_limits(cfg, ax5)
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_weight_%d.png' % index), bbox_inches='tight')
+        plt.close(fig5)
+        print("-- OK.")
+
     if predictions is not None:
+        print("-- Predictions:")
         fig3 = plt.figure()
         ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
         blob_pred = {}
@@ -166,11 +185,14 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
             blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0, ...])
         else:
             blob_pred['data'] = predictions[:, :, :, np.newaxis]
+        print("-- Displaying...")
         display_original_image(blob_pred, cfg, ax3, vmax=3.1)
         set_image_limits(cfg, ax3)
+        print("-- Saving...")
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
         plt.close(fig3)
+        print("--- OK.")
 
     # if scores is not None:
     #     fig4 = plt.figure()

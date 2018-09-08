@@ -21,8 +21,13 @@ python faster_particles/bin/ppn.py train \
   --base-net uresnet \
   --net base \
   --data "/data/codalab/train_1-2.hdf5" \
+  --test-data "/data/codalab/train_1-2.hdf5" \
   -N 192 \
+  --num-classes 3 \
   -m 100000 \
   -3d \
   -hdf5 \
-  --gpu '2,3'
+  --enable-crop \
+  -ss 64 \
+  --batch-size 16 \
+  --gpu '1'

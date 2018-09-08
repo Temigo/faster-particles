@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 import os
+import sys
 import numpy as np
 
 from faster_particles.demo_ppn import load_weights
@@ -160,6 +161,7 @@ class Trainer(object):
         print("Start training...")
         real_step = 0
         for step in range(self.cfg.MAX_STEPS):
+            sys.stdout.flush()
             is_testing = step % 10 == 5
             if is_testing:
                 blob = self.test_toydata.forward()
