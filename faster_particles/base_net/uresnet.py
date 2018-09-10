@@ -7,15 +7,18 @@ from base_net import BaseNet
 class UResNet(BaseNet):
     def __init__(self, cfg, N=0):
         super(UResNet, self).__init__(cfg, N=N)
+        # function poinsters for used operations in 2d vs. 3d
         self.fn_conv = slim.conv2d
         self.fn_conv_transpose = slim.conv2d_transpose
         if self.is_3d:
             self.fn_conv = slim.conv3d
             self.fn_conv_transpose = slim.conv3d_transpose
-
+        # dict to store output tensors (feature maps) from the encoding path
         self.conv_feature_map = {}
+        # number of the first conv layer's filters which determines the following layers' filter count
         self.base_num_outputs = cfg.BASE_NUM_OUTPUTS
-        self._num_strides = 3  # 4
+        # how many times stride=2 is applied
+        self._num_strides = 5 
 
     def init_placeholders(self, image=None, labels=None):
         self.image_placeholder = tf.placeholder(
