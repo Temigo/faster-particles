@@ -17,13 +17,9 @@ from faster_particles.ppn import PPN
 from faster_particles.base_net.uresnet import UResNet
 from faster_particles.base_net import basenets
 from faster_particles.metrics import PPNMetrics, UResNetMetrics
-# from faster_particles import ToydataGenerator
-# from faster_particles.larcvdata.larcvdata_generator import LarcvGenerator
-# from faster_particles.hdf5data.hdf5data_generator import HDF5Generator
-from faster_particles.data import ToydataGenerator, LarcvGenerator, HDF5Generator
+from faster_particles.data import ToydataGenerator, LarcvGenerator, \
+                                HDF5Generator, CSVGenerator
 from faster_particles.cropping import cropping_algorithms
-
-CLASSES = ('__background__', 'track_edge', 'shower_start', 'track_and_shower')
 
 
 def get_data(cfg):
@@ -32,13 +28,16 @@ def get_data(cfg):
     """
     if cfg.TEST_DATA == "":
         cfg.TEST_DATA = cfg.DATA
-    if cfg.TOYDATA:
+    if cfg.DATA_TYPE == 'toydata':
         train_data = ToydataGenerator(cfg)
         test_data = ToydataGenerator(cfg)
-    elif cfg.HDF5:
+    elif cfg.DATA_TYPE == 'hdf5':
         train_data = HDF5Generator(cfg, filelist=cfg.DATA)
-        test_data = HDF5Generator(cfg, filelist=cfg.TEST_DATA)
-    else:
+        test_data = HDF5Generator(cfg, filelist=cfg.TEST_DATA, is_testing=True)
+    elif cfg.DATA_TYPE == 'csv':
+        train_data = CSVGenerator(cfg, filelist=cfg.DATA)
+        test_data = CSVGenerator(cfg, filelist=cfg.TEST_DATA)
+    else:  # default is LArCV data
         train_data = LarcvGenerator(cfg, ioname="train",
                                     filelist=get_filelist(cfg.DATA))
         test_data = LarcvGenerator(cfg, ioname="test",

@@ -15,18 +15,18 @@
 # Short version of the arguments can be found in config.py
 
 python faster_particles/bin/ppn.py train \
-  --display-dir display/train_codalab \
-  -o /data/train_codalab \
-  -l log/train_codalab \
+  --display-dir display/train_codalab1 \
+  -o /data/train_codalab1 \
+  -l log/train_codalab1 \
   --base-net uresnet \
   --net base \
-  --data "/data/codalab/train_1-2.hdf5" \
-  --test-data "/data/codalab/train_1-2.hdf5" \
+  --data "/data/codalab/train_5-6.csv" \
+  --test-data "/data/codalab/train_5-6.csv" \
+  --data-type 'csv' \
   -N 192 \
-  --num-classes 3 \
+  --num-classes 4 \
   -m 100000 \
   -3d \
-  -hdf5 \
   --enable-crop \
   -ss 64 \
   --batch-size 16 \

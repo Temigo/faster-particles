@@ -15,10 +15,11 @@ class UResNet(BaseNet):
             self.fn_conv_transpose = slim.conv3d_transpose
         # dict to store output tensors (feature maps) from the encoding path
         self.conv_feature_map = {}
-        # number of the first conv layer's filters which determines the following layers' filter count
+        # number of the first conv layer's filters
+        # which determines the following layers' filter count
         self.base_num_outputs = cfg.BASE_NUM_OUTPUTS
         # how many times stride=2 is applied
-        self._num_strides = 5 
+        self._num_strides = 5
 
     def init_placeholders(self, image=None, labels=None):
         self.image_placeholder = tf.placeholder(

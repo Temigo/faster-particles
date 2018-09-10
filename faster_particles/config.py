@@ -22,7 +22,6 @@ class PPNConfig(object):
     CORE_SIZE = 32
     ENABLE_CROP = False
     CROP_ALGO = "proba"
-    HDF5 = False
 
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
@@ -55,7 +54,7 @@ class PPNConfig(object):
     BATCH_SIZE = 1
     SEED = 123
     NEXT_INDEX = 0
-    TOYDATA = False
+    DATA_TYPE = 'larcv'
     DATA = "/data/dlprod_ppn_v08_p01/test.root"
     TEST_DATA = ""
     DATA_3D = False
@@ -92,8 +91,8 @@ class PPNConfig(object):
         self.train_parser.add_argument("-l", "--log-dir", action='store', type=str, required=True, help="Path to log directory.")
         self.train_parser.add_argument("-c", "--num-classes", default=self.NUM_CLASSES, type=int, help="Number of classes (including background).")
         self.train_parser.add_argument("-r", "--r", default=self.R, type=int, help="Max number of ROIs from PPN1")
-        self.train_parser.add_argument("-st", "--ppn1-score-threshold", default=self.PPN1_SCORE_THRESHOLD, type=float, help="Threshold on signal score to define positives in PPN1")
-        self.train_parser.add_argument("-dt", "--ppn2-distance-threshold", default=self.PPN2_DISTANCE_THRESHOLD, type=float, help="Threshold on distance to closest ground truth pixel to define positives in PPN2")
+        self.train_parser.add_argument("-ppn1st", "--ppn1-score-threshold", default=self.PPN1_SCORE_THRESHOLD, type=float, help="Threshold on signal score to define positives in PPN1")
+        self.train_parser.add_argument("-ppn2dt", "--ppn2-distance-threshold", default=self.PPN2_DISTANCE_THRESHOLD, type=float, help="Threshold on distance to closest ground truth pixel to define positives in PPN2")
         self.train_parser.add_argument("-lr", "--learning-rate", default=self.LEARNING_RATE, type=float, help="Learning rate")
         self.train_parser.add_argument("-lppn", "--lambda-ppn", default=self.LAMBDA_PPN, type=float, help="Lambda PPN (for loss weighting)")
         self.train_parser.add_argument("-lppn1", "--lambda-ppn1", default=self.LAMBDA_PPN1, type=float, help="Lambda PPN1")
@@ -121,7 +120,7 @@ class PPNConfig(object):
         parser.add_argument("-3d", "--data-3d", default=self.DATA_3D, action='store_true', help="Use 3D instead of 2D.")
         parser.add_argument("-data", "--data", default=self.DATA, type=str, help="Path to data files. Can use ls regex format.")
         parser.add_argument("-tdata", "--test-data", default=self.TEST_DATA, type=str, help="Path to test data files. Can use ls regex format.")
-        parser.add_argument("-td", "--toydata", default=self.TOYDATA, action='store_true', help="Whether to use toydata or not")
+        parser.add_argument("-dt", "--data-type", default=self.DATA_TYPE, type=str, choices=['toydata', 'larcv', 'hdf5', 'csv'], help="Type of the data file (toydata, larcv, hdf5, csv).")
         parser.add_argument("-bn", "--base-net", default=self.BASE_NET, type=str, help="Base network of PPN (e.g. VGG)")
         parser.add_argument("-n", "--net", default=self.NET, type=str, choices=['ppn', 'base', 'full', 'small_uresnet', 'ppn_ext'], help="Whether to use base net or PPN net or both.")
         parser.add_argument("-N", "--image-size", action='store', default=self.IMAGE_SIZE, type=int, help="Width (and height) of image.")
@@ -149,7 +148,6 @@ class PPNConfig(object):
         parser.add_argument("-cs", "--crop-size", action='store', default=self.CROP_SIZE, type=int, help="Width (and height) of cropped region for small UResNet.")
         parser.add_argument("-pp", "--postprocessing", default=self.POSTPROCESSING, type=str, choices=['nms', 'dbscan'], help="Choice of postprocessing method for PPN (either NMS or DBSCAN).")
         parser.add_argument("-ca", "--crop-algo", default=self.CROP_ALGO, type=str, choices=['proba', 'octree'], help="Choice of cropping method (either probablistic or octree algorithm).")
-        parser.add_argument("-hdf5", "--hdf5", action='store_true', default=self.HDF5, help="Use HDF5 data file reader.")
         parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UResNet.")
         parser.add_argument("-ua", "--uresnet-add", action='store_true', default=self.URESNET_ADD, help="Use add instead of concat in UResNet.")
         parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")

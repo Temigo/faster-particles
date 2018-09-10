@@ -168,7 +168,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
             blob_weight['voxels'], blob_weight['voxels_value'] = extract_voxels(blob['weight'][0, ...])
         else:
             blob_weight['data'] = blob['weight'][:, :, :, np.newaxis]
-        display_original_image(blob_weight, cfg, ax5, vmax=np.maximum(blob['weight']))
+        display_original_image(blob_weight, cfg, ax5, vmax=np.amax(blob['weight']))
         set_image_limits(cfg, ax5)
         # Use dpi=1000 for high resolution
         plt.savefig(os.path.join(directory, name + '_weight_%d.png' % index), bbox_inches='tight')

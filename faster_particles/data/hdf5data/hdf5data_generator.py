@@ -8,6 +8,10 @@ from faster_particles.display_utils import extract_voxels
 
 
 class HDF5Generator(object):
+    """
+    Read HDF5 data files.
+    Expecting at least a `data` column, possibly a `label` column.
+    """
 
     def __init__(self, cfg, filelist="", is_testing=False):
         self.N = cfg.IMAGE_SIZE  # shape of canvas
