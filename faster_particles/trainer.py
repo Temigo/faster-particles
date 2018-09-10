@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 from faster_particles.demo_ppn import load_weights
-from faster_particles.display_utils import extract_voxels
+from faster_particles.display_utils import extract_voxels, draw_slicing
 from faster_particles.cropping import cropping_algorithms
 
 
@@ -163,15 +163,22 @@ class Trainer(object):
         for step in range(self.cfg.MAX_STEPS):
             sys.stdout.flush()
             is_testing = step % 10 == 5
+            is_drawing = step % 200 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:
                 blob = self.train_toydata.forward()
+            if step % 10 == 0:
+                print("Iteration %d/%d" % (step, self.cfg.MAX_STEPS))
 
             # Cropping pre-processing
             patch_centers, patch_sizes = None, None
             if self.cfg.ENABLE_CROP:
                 batch_blobs, patch_centers, patch_sizes = crop_algorithm.process(blob)
+                if is_drawing:
+                    draw_slicing(blob, self.cfg, patch_centers, patch_sizes,
+                                 index=step, name='slices',
+                                 directory=os.path.join(self.cfg.DISPLAY_DIR, 'cropping'))
             else:
                 batch_blobs = [blob]
 

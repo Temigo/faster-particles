@@ -17,22 +17,26 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
 class PPNConfig(object):
     IMAGE_SIZE = 768  # 512
-    CROP_SIZE = 24
+    CROP_SIZE = 24  # small UResNet training
+
+    # Cropping algorithms
     SLICE_SIZE = 64
     CORE_SIZE = 32
     ENABLE_CROP = False
     CROP_ALGO = "proba"
+    MAX_PATCHES = 500
 
+    # General settings
     OUTPUT_DIR = "output"
     LOG_DIR = "log"
     DISPLAY_DIR = "display"
+    MAX_STEPS = 100
+    LEARNING_RATE = 0.001
 
-    NUM_CLASSES = 3  # For base network only
-    BASE_NUM_OUTPUTS = 16  # For UResNet
+    # PPN
     R = 20
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
-    LEARNING_RATE = 0.001
     LAMBDA_PPN = 0.5
     LAMBDA_PPN1 = 0.5
     LAMBDA_PPN2 = 0.5
@@ -43,12 +47,15 @@ class PPNConfig(object):
     FREEZE = False  # Whether to freeze the weights of base net
     NET = 'ppn'
     BASE_NET = 'vgg'
-    MAX_STEPS = 100
     WEIGHT_LOSS = False
     MIN_SCORE = 0.0
     POSTPROCESSING = 'nms'  # Postprocessing: use either NMS or DBSCAN
+
+    # UResNet
     URESNET_WEIGHTING = False  # Use pixel-weighting scheme in UResNet
     URESNET_ADD = False  # Whether to use add or concat in UResNet
+    NUM_CLASSES = 3  # For base network only
+    BASE_NUM_OUTPUTS = 16  # For UResNet
 
     # Data configuration
     BATCH_SIZE = 1
@@ -151,6 +158,7 @@ class PPNConfig(object):
         parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UResNet.")
         parser.add_argument("-ua", "--uresnet-add", action='store_true', default=self.URESNET_ADD, help="Use add instead of concat in UResNet.")
         parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")
+        parser.add_argument("-mp", "--max-patches", action='store', default=self.MAX_PATCHES, type=int, help="Max number of patches for cropping algo (probabilistic).")
 
     def parse_args(self):
         args = self.parser.parse_args()

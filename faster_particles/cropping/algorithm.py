@@ -8,22 +8,30 @@ class CroppingAlgorithm(object):
     and implement crop method (see below)
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, debug=False):
         self.cfg = cfg
         self.d = cfg.SLICE_SIZE  # Patch or box/crop size
         self.a = cfg.SLICE_SIZE / 2  # Core size
         self.N = cfg.IMAGE_SIZE
+        self._debug = debug
 
     def crop(self, coords):
         """
         coords is expected to be dimensions (None, 3) = list of non-zero voxels
-        Returns a list of patches centers and sizes
+        Returns a list of patches centers and sizes (of cubes centered at the
+        patch centers)
         """
         pass
 
     def process(self, original_blob):
         # FIXME cfg.SLICE_SIZE vs patch_size
         patch_centers, patch_sizes = self.crop(original_blob['voxels'])
+        if self._debug:
+            print("Cropping %d patches..." % len(patch_centers))
+            print("Overlap: ",
+                  self.compute_overlap(original_blob['voxels'],
+                                       patch_centers,
+                                       sizes=patch_sizes[:, np.newaxis]))
         batch_blobs = []
         for i in range(len(patch_centers)):
             patch_center, patch_size = patch_centers[i], patch_sizes[i]
@@ -86,3 +94,18 @@ class CroppingAlgorithm(object):
                 batch_blobs.append(blob)
 
         return batch_blobs, patch_centers, patch_sizes
+
+    def compute_overlap(self, coords, patch_centers, sizes=None):
+        """
+        Compute overlap dict: dict[x] gives the number of voxels which belong
+        to x patches.
+        """
+        if sizes is None:
+            sizes = self.d/2.0
+        overlap = []
+        for voxel in coords:
+            overlap.append(np.sum(np.all(np.logical_and(
+                patch_centers-sizes <= voxel,
+                patch_centers + sizes >= voxel
+                ), axis=1)))
+        return dict(zip(*np.unique(overlap, return_counts=True)))

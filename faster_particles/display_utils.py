@@ -32,24 +32,45 @@ def draw_voxel(x, y, z, size, ax, alpha=0.3, facecolors='pink', **kwargs):
 
 
 def display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet'):
-    # Display original image
+    """
+    Display original image.
+
+    If data is 2D or no voxel_values are provided, `data` is mandatory.
+    IF `voxel_values` is provided it will be used for color.
+    """
     if cfg.DATA_3D:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-        colors = lambda i,j,k : matplotlib.cm.ScalarMappable(norm=norm,cmap=cmap).to_rgba(blob['data'][0, i, j, k, 0])
+        colorbar = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
+        if 'voxels_value' in blob:
+            colors = lambda i: colorbar.to_rgba(blob['voxels_value'][i])
+        else:
+            colors = lambda i, j, k: colorbar.to_rgba(blob['data'][0, i, j, k, 0])
         for i, voxel in enumerate(blob['voxels']):
             if 'voxels_value' in blob:
                 if blob['voxels_value'][i] == 1:  # track
-                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='teal', alpha=1.0, linewidths=0.0, edgecolors='black')
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax,
+                               facecolors='teal', alpha=1.0,
+                               linewidths=0.0, edgecolors='black')
                 elif blob['voxels_value'][i] == 2:  # shower
-                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='gold', alpha=1.0, linewidths=0.0, edgecolors='black')
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax,
+                               facecolors='gold', alpha=1.0,
+                               linewidths=0.0, edgecolors='black')
                 else:
-                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors='black', alpha=0.3, linewidths=0.0, edgecolors='black')
+                    c = colors(i)
+                    draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax,
+                               facecolors=c, alpha=1.0,
+                               linewidths=0.0, edgecolors=c)
             else:
                 voxel = voxel.astype(int)
                 c = colors(voxel[2], voxel[1], voxel[0])
-                draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax, facecolors=c, alpha=1.0, linewidths=0.0, edgecolors=c)
+                draw_voxel(voxel[0], voxel[1], voxel[2], 1, ax,
+                           facecolors=c, alpha=1.0,
+                           linewidths=0.0, edgecolors=c)
+        return colorbar
     else:
-        ax.imshow(blob['data'][0,...,0], cmap=cmap, interpolation='none', origin='lower', vmin=vmin, vmax=vmax)
+        return ax.imshow(blob['data'][0, ..., 0], cmap=cmap,
+                         interpolation='none', origin='lower',
+                         vmin=vmin, vmax=vmax)
 
 
 def set_image_limits(cfg, ax):
@@ -309,3 +330,112 @@ def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
     plt.close(fig3)
 
     return im_proposals
+
+
+def draw_cube(ax, coord, size):
+    x, y, z = coord[0], coord[1], coord[2]
+    vertices = [
+        [[x, y, z], [x, y+size, z], [x+size, y+size, z], [x+size, y, z]],
+        [[x, y, z+size], [x, y+size, z+size], [x+size, y+size, z+size], [x+size, y, z+size]],
+        [[x, y, z], [x, y+size, z], [x, y+size, z+size], [x, y, z+size]],
+        [[x+size, y, z], [x+size, y+size, z], [x+size, y+size, z+size], [x+size, y, z+size]],
+        [[x, y, z], [x+size, y, z], [x+size, y, z+size], [x, y, z+size]],
+        [[x, y+size, z], [x+size, y+size, z], [x+size, y+size, z+size], [x, y+size, z+size]]
+    ]
+    poly = Poly3DCollection(vertices, linewidths=0.1, edgecolors='r')
+    poly.set_alpha(0)
+    poly.set_facecolors('cyan')
+    ax.add_collection3d(poly)
+
+
+def compute_voxel_overlap(coords, patch_centers, patch_sizes):
+    """
+    Returns overlap value for each voxel.
+    """
+    overlap = []
+    for voxel in coords:
+        overlap.append(np.sum(np.all(np.logical_and(
+            patch_centers-patch_sizes/2.0 <= voxel,
+            patch_centers + patch_sizes/2.0 >= voxel
+            ), axis=1)))
+    return overlap
+
+
+def compute_voxel_core(coords, patch_centers, core_size):
+    """
+    Returns for each voxel whether it belongs to a core region.
+    """
+    overlap = []
+    for voxel in coords:
+        overlap.append(np.any(np.all(np.logical_and(
+            patch_centers - core_size/2.0 <= voxel,
+            patch_centers + core_size/2.0 >= voxel
+            ), axis=1)))
+    return overlap
+
+
+def draw_slicing(blob, cfg, patch_centers, patch_sizes,
+                 name='display', directory='', index=0):
+    if directory == '':
+        directory = cfg.DISPLAY_DIR
+    else:
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
+    kwargs = {}
+    if cfg.DATA_3D:
+        kwargs['projection'] = '3d'
+
+    # 1. Plot original image with patches drawn as red cubes
+    fig = plt.figure()
+    ax = fig.add_subplot(111, aspect='equal', **kwargs)
+    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
+    for i, p in enumerate(patch_centers):
+        if type(patch_sizes) == int or type(patch_sizes) == float:
+            draw_cube(ax, p - patch_sizes/2.0, patch_sizes)
+        else:
+            draw_cube(ax, p - patch_sizes[i]/2.0, patch_sizes[i])
+    set_image_limits(cfg, ax)
+    # Use dpi=1000 for high resolution
+    plt.savefig(os.path.join(directory,
+                             name + '_patches_%d_%d.png' % (index, blob['entries'][0])),
+                bbox_inches='tight')
+    plt.close(fig)
+
+    # 2. Plot overlap values for each voxel
+    overlap = compute_voxel_overlap(blob['voxels'], patch_centers, patch_sizes[:, np.newaxis])
+    fig2 = plt.figure()
+    ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
+    blob_overlap = {}
+    if cfg.DATA_3D:
+        blob_overlap['voxels'], blob_overlap['voxels_value'] = blob['voxels'], overlap
+    else:
+        blob_overlap['data'] = blob['data']
+    colorbar = display_original_image(blob_overlap, cfg, ax2,
+                                      vmax=np.amax(overlap), cmap='rainbow')
+    colorbar.set_array([])
+    fig2.colorbar(colorbar, ax=ax2)
+    set_image_limits(cfg, ax2)
+    # Use dpi=1000 for high resolution
+    plt.savefig(os.path.join(directory, name + '_overlap_%d.png' % index),
+                bbox_inches='tight')
+    plt.close(fig2)
+
+    # 3. Whether each voxel belongs to at least 1 core region
+    overlap = compute_voxel_core(blob['voxels'], patch_centers, cfg.CORE_SIZE)
+    fig3 = plt.figure()
+    ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
+    blob_core = {}
+    if cfg.DATA_3D:
+        blob_core['voxels'], blob_core['voxels_value'] = blob['voxels'], overlap
+    else:
+        blob_core['data'] = blob['data']
+    colorbar = display_original_image(blob_core, cfg, ax3,
+                                      vmax=np.amax(overlap), cmap='tab10')
+    # colorbar.set_array([])
+    # fig2.colorbar(colorbar, ax=ax2)
+    set_image_limits(cfg, ax3)
+    # Use dpi=1000 for high resolution
+    plt.savefig(os.path.join(directory, name + '_core_%d.png' % index),
+                bbox_inches='tight')
+    plt.close(fig3)

@@ -28,4 +28,4 @@ python faster_particles/bin/ppn.py train \
   --enable-crop \
   -ss 64 \
   -3d \
-  --gpu '0'
+  --gpu '5'
