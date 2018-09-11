@@ -21,9 +21,10 @@ python faster_particles/bin/ppn.py train \
   --base-net uresnet \
   --net base \
   --uresnet-weighting \
-  --data "/data/dlprod_ppn_v08_p01_filtered/train_p01.root" \
-  --test-data "/data/dlprod_ppn_v08_p01_filtered/test_p01.root" \
-  -N 512 \
+  --weights-file-base "/data/train_slicing9/model-40000.ckpt" \
+  --data "/data/dlprod_ppn_v08_p02/train_p02.root" \
+  --test-data "/data/dlprod_ppn_v08_p02/test_p02.root" \
+  -N 192 \
   -m 1 \
   --enable-crop \
   -ss 64 \

@@ -15,11 +15,14 @@ class Probabilistic(CroppingAlgorithm):
     (becomes zero for the core for example)
     4. Start from 1. again until all voxels are marked properly
     (i.e. any voxel is either in a core or overlapped at least xx times)
+
+    Guarantees a minimum coverage.
     """
 
     def __init__(self, cfg):
         super(Probabilistic, self).__init__(cfg)
         self.max_patches = cfg.MAX_PATCHES  # FIXME best value?
+        self.min_overlap = cfg.MIN_OVERLAP
 
     def crop(self, coords):
         n = coords.shape[0]
@@ -27,7 +30,7 @@ class Probabilistic(CroppingAlgorithm):
         i = 0
         patches = []  # List of center coordinates of patches dxd
         voxel_num_boxes = np.zeros_like(proba)
-        while np.count_nonzero(voxel_num_boxes < 2) > 0 and i < self.max_patches:
+        while np.count_nonzero(voxel_num_boxes < self.min_overlap) > 0 and i < self.max_patches:
             indices = np.random.choice(np.arange(n), p=proba)
             selection_inside = np.all(np.logical_and(
                 coords >= coords[indices] - self.d/2,
@@ -55,4 +58,8 @@ class Probabilistic(CroppingAlgorithm):
             if np.sum(proba) == 0.0:
                 break
             proba = proba / np.sum(proba)
+
+        if i == self.max_patches:
+            print("WARNING -- Reached the max number of patches in cropping algo.")
+
         return np.array(patches), np.array([self.cfg.SLICE_SIZE] * len(patches))

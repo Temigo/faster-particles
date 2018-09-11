@@ -24,7 +24,8 @@ class PPNConfig(object):
     CORE_SIZE = 32
     ENABLE_CROP = False
     CROP_ALGO = "proba"
-    MAX_PATCHES = 500
+    MAX_PATCHES = 500  # for proba algo
+    MIN_OVERLAP = 2  # for proba algo
 
     # General settings
     OUTPUT_DIR = "output"
@@ -159,6 +160,7 @@ class PPNConfig(object):
         parser.add_argument("-ua", "--uresnet-add", action='store_true', default=self.URESNET_ADD, help="Use add instead of concat in UResNet.")
         parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")
         parser.add_argument("-mp", "--max-patches", action='store', default=self.MAX_PATCHES, type=int, help="Max number of patches for cropping algo (probabilistic).")
+        parser.add_argument("-mo", "--min-overlap", action='store', default=self.MIN_OVERLAP, type=int, help="Min number of overlap for cropping algo (probabilistic).")
 
     def parse_args(self):
         args = self.parser.parse_args()

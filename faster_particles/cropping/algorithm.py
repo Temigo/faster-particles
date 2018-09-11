@@ -1,5 +1,6 @@
 import numpy as np
 from faster_particles.ppn_utils import crop as crop_util
+from faster_particles.display_utils import extract_voxels
 
 
 class CroppingAlgorithm(object):
@@ -11,7 +12,7 @@ class CroppingAlgorithm(object):
     def __init__(self, cfg, debug=False):
         self.cfg = cfg
         self.d = cfg.SLICE_SIZE  # Patch or box/crop size
-        self.a = cfg.SLICE_SIZE / 2  # Core size
+        self.a = cfg.CORE_SIZE  # Core size
         self.N = cfg.IMAGE_SIZE
         self._debug = debug
 
@@ -26,12 +27,6 @@ class CroppingAlgorithm(object):
     def process(self, original_blob):
         # FIXME cfg.SLICE_SIZE vs patch_size
         patch_centers, patch_sizes = self.crop(original_blob['voxels'])
-        if self._debug:
-            print("Cropping %d patches..." % len(patch_centers))
-            print("Overlap: ",
-                  self.compute_overlap(original_blob['voxels'],
-                                       patch_centers,
-                                       sizes=patch_sizes[:, np.newaxis]))
         batch_blobs = []
         for i in range(len(patch_centers)):
             patch_center, patch_size = patch_centers[i], patch_sizes[i]
@@ -109,3 +104,46 @@ class CroppingAlgorithm(object):
                 patch_centers + sizes >= voxel
                 ), axis=1)))
         return dict(zip(*np.unique(overlap, return_counts=True)))
+
+    def reconcile(self, batch_results, patch_centers, patch_sizes):
+        # Reconcile slices result together
+        # using batch_results, batch_blobs, patch_centers and patch_sizes
+        final_results = {}
+        # UResNet predictions
+        if 'predictions' and 'scores' and 'softmax' in batch_results[0]:
+            final_voxels = np.array([], dtype=np.int32).reshape(0, 3)  # Shape N_voxels x dim
+            final_scores = np.array([], dtype=np.float32).reshape(0, self.cfg.NUM_CLASSES)  # Shape N_voxels x num_classes
+            final_counts = np.array([], dtype=np.int32).reshape(0,)  # Shape N_voxels x 1
+            for i, result in enumerate(batch_results):
+                # Extract voxel and voxel values
+                # Shape N_voxels x dim
+                v, values = extract_voxels(result['predictions'])
+                # Extract corresponding softmax scores
+                # Shape N_voxels x num_classes
+                scores = result['softmax'][v.T[0], v.T[1], v.T[2], :]
+                # Restore original blob coordinates
+                v = (v + np.flipud(patch_centers[i]) - patch_sizes[i] / 2.0).astype(np.int64)
+                v = np.clip(v, 0, self.cfg.IMAGE_SIZE-1)
+                # indices are  indices of the *first* occurrences of the unique values
+                # hence for doublons they are indices in final_voxels
+                # We assume the only overlap that can occur is between
+                # final_voxels and v, not inside these arrays themselves
+                n = final_voxels.shape[0]
+                final_voxels, indices, counts = np.unique(np.concatenate([final_voxels, v], axis=0), axis=0, return_index=True, return_counts=True)
+                final_scores = np.concatenate([final_scores, scores], axis=0)[indices]
+                lower_indices = indices[indices < n]
+                upper_indices = indices[indices >= n]
+                final_counts[lower_indices] += counts[lower_indices] - 1
+                final_counts = np.concatenate([final_counts, np.ones((upper_indices.shape[0],))], axis=0)
+
+            final_scores = final_scores / final_counts[:, np.newaxis]  # Compute average
+            final_predictions = np.argmax(final_scores, axis=1)
+            final_results['predictions'] = np.zeros((self.cfg.IMAGE_SIZE,) * 3)
+            final_results['predictions'][final_voxels.T[0], final_voxels.T[1], final_voxels.T[2]] = final_predictions
+            final_results['scores'] = np.zeros((self.cfg.IMAGE_SIZE,) * 3)
+            final_results['scores'][final_voxels.T[0], final_voxels.T[1], final_voxels.T[2]] = final_scores[np.arange(final_scores.shape[0]), final_predictions]
+            final_results['softmax'] = np.zeros((self.cfg.IMAGE_SIZE,) * 3 + (self.cfg.NUM_CLASSES,))
+            final_results['softmax'][final_voxels.T[0], final_voxels.T[1], final_voxels.T[2], :] = final_scores
+            final_results['predictions'] = final_results['predictions'][np.newaxis, ...]
+
+            return final_results
