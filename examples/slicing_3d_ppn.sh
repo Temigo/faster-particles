@@ -20,9 +20,11 @@ python faster_particles/bin/ppn.py train \
   -l log/train_ppn3d \
   --base-net uresnet \
   --net ppn \
-  -wb /data/run_uresnet3d2/model-62000.ckpt \
-  --data "/data/dlprod_ppn_v08_p01/train.root" \
+  --weights-file-base "/data/train_slicing9/model-40000.ckpt" \
   --freeze \
+  --weights-file-ppn "/data/train_ppn3/model-112000.ckpt" \
+  --data "/data/dlprod_ppn_v08_p01_filtered/train_p01.root" \
+  --test-data "/data/dlprod_ppn_v08_p01_filtered/test_p01.root" \
   -N 512 \
   -m 1 \
   --enable-crop \

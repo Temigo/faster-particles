@@ -139,6 +139,9 @@ class Trainer(object):
         self.test_net.create_architecture(is_training=False,
                                           reuse=True,
                                           scope=scope)
+        if self.cfg.NET in ['ppn', 'ppn_ext', 'full']:
+            self.cfg.dim1 = self.train_net.dim1
+            self.cfg.dim2 = self.train_net.dim2
         print("Done.")
 
         # with tf.Session() as sess:
@@ -196,13 +199,13 @@ class Trainer(object):
 
             i = 0
             batch_results = []
-            while i < len(batch_blobs):
-                blobs = batch_blobs[i:min(i+self.batch_size, len(batch_blobs))]
+            while i+self.batch_size < len(batch_blobs):
+                blobs = batch_blobs[i:i+self.batch_size]
                 miniblob = {}
                 for key in blobs[0]:
                     miniblob[key] = np.concatenate([b[key] for b in blobs])
 
-                i += len(blobs)
+                i += self.batch_size
                 real_step, result = self.process_blob(i, miniblob, real_step,
                                                       saver, is_testing,
                                                       summary_writer_train,
@@ -215,7 +218,10 @@ class Trainer(object):
                 for j in range(len(blobs)):
                     r = {}
                     for key in result:
-                        r[key] = result[key][j]
+                        if key in ['im_proposals', 'im_scores', 'im_labels', 'rois']:
+                            r[key] = result[key]
+                        else:
+                            r[key] = result[key][j]
                     batch_results.append(r)
 
             final_results = crop_algorithm.reconcile(batch_results,

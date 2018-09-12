@@ -36,6 +36,11 @@ class PPNConfig(object):
 
     # PPN
     R = 20
+    # Feature map indexes:
+    # 0 is stride 0 (original image size).
+    # See uresnet.py to get the spatial depth.
+    PPN1_INDEX = 2  # Index of the intermediate feature map in PPN
+    PPN2_INDEX = -1  # Index of the final feature map in PPN
     PPN1_SCORE_THRESHOLD = 0.6
     PPN2_DISTANCE_THRESHOLD = 5
     LAMBDA_PPN = 0.5
@@ -161,6 +166,8 @@ class PPNConfig(object):
         parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")
         parser.add_argument("-mp", "--max-patches", action='store', default=self.MAX_PATCHES, type=int, help="Max number of patches for cropping algo (probabilistic).")
         parser.add_argument("-mo", "--min-overlap", action='store', default=self.MIN_OVERLAP, type=int, help="Min number of overlap for cropping algo (probabilistic).")
+        parser.add_argument("-ppn1i", "--ppn1-index", action='store', default=self.PPN1_INDEX, type=int, help="Index of intermediate feature map for PPN1.")
+        parser.add_argument("-ppn2i", "--ppn2-index", action='store', default=self.PPN2_INDEX, type=int, help="Index of last feature map for PPN2.")
 
     def parse_args(self):
         args = self.parser.parse_args()

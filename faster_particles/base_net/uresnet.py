@@ -7,7 +7,7 @@ from base_net import BaseNet
 class UResNet(BaseNet):
     def __init__(self, cfg, N=0):
         super(UResNet, self).__init__(cfg, N=N)
-        # function poinsters for used operations in 2d vs. 3d
+        # function pointers for used operations in 2d vs. 3d
         self.fn_conv = slim.conv2d
         self.fn_conv_transpose = slim.conv2d_transpose
         if self.is_3d:
@@ -155,7 +155,6 @@ class UResNet(BaseNet):
                     num_outputs=self.base_num_outputs,
                     kernel_size=3,
                     stride=1,
-                    # activation_fn = tf.nn.relu, FIXME this is default?
                     padding='same',
                     scope='conv0')
                 self.conv_feature_map[net.get_shape()[-1].value] = net
@@ -170,8 +169,8 @@ class UResNet(BaseNet):
                     self.conv_feature_map[net.get_shape()[-1].value] = net
 
         keys = np.sort(self.conv_feature_map.keys())
-        key2 = keys[-1]
-        key = keys[int(len(keys)/2.0)-1]  # -1
+        key2 = keys[self.cfg.PPN2_INDEX]
+        key = keys[self.cfg.PPN1_INDEX]
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
     def create_architecture(self, is_training=True, reuse=False,

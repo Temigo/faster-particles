@@ -106,9 +106,14 @@ class CroppingAlgorithm(object):
         return dict(zip(*np.unique(overlap, return_counts=True)))
 
     def reconcile(self, batch_results, patch_centers, patch_sizes):
-        # Reconcile slices result together
-        # using batch_results, batch_blobs, patch_centers and patch_sizes
+        """
+        Reconcile slices result together
+        using batch_results, batch_blobs, patch_centers and patch_sizes
+        """
         final_results = {}
+        if len(batch_results) == 0:  # Empty batch
+            return final_results
+
         # UResNet predictions
         if 'predictions' and 'scores' and 'softmax' in batch_results[0]:
             final_voxels = np.array([], dtype=np.int32).reshape(0, 3)  # Shape N_voxels x dim
@@ -146,4 +151,32 @@ class CroppingAlgorithm(object):
             final_results['softmax'][final_voxels.T[0], final_voxels.T[1], final_voxels.T[2], :] = final_scores
             final_results['predictions'] = final_results['predictions'][np.newaxis, ...]
 
-            return final_results
+        # PPN
+        if 'im_proposals' and 'im_scores' and 'im_labels' and 'rois' in batch_results[0]:
+            print(batch_results[0]['im_proposals'].shape, batch_results[0]['im_scores'].shape, batch_results[0]['im_labels'].shape, batch_results[0]['rois'].shape)
+            final_im_proposals = np.array([], dtype=np.float32).reshape(0, 3)
+            final_im_scores = np.array([], dtype=np.float32).reshape(0,)
+            final_im_labels = np.array([], dtype=np.int32).reshape(0,)
+            final_rois = np.array([], dtype=np.float32).reshape(0, 3)
+            for i, result in enumerate(batch_results):
+                im_proposals = result['im_proposals'] + np.flipud(patch_centers[i]) - patch_sizes[i] / 2.0
+                im_proposals = np.clip(im_proposals, 0, self.cfg.IMAGE_SIZE-1)
+                print(final_im_proposals, im_proposals)
+                final_im_proposals = np.concatenate([final_im_proposals, im_proposals], axis=0)
+                final_im_scores = np.concatenate([final_im_scores, result['im_scores']], axis=0)
+                final_im_labels = np.concatenate([final_im_labels, result['im_labels']], axis=0)
+                rois = result['rois'] + (np.flipud(patch_centers[i]) - patch_sizes[i] / 2.0) / (self.cfg.dim1 * self.cfg.dim2)
+                rois = np.clip(rois, 0, self.cfg.IMAGE_SIZE-1)
+                final_rois = np.concatenate([final_rois, rois], axis=0)
+            final_results['im_proposals'] = np.array(final_im_proposals)
+            final_results['im_scores'] = np.array(final_im_scores)
+            final_results['im_labels'] = np.array(final_im_labels)
+            final_results['rois'] = np.array(final_rois)
+
+            # Try thresholding
+            # index = np.where(final_results['im_scores'] > 1e-3)
+            # final_results['im_proposals'] = final_results['im_proposals'][index, :]
+            # final_results['im_scores'] = final_results['im_scores'][index]
+            # final_results['im_labels'] = final_results['im_labels'][index]
+
+        return final_results
