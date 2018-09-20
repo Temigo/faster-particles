@@ -149,6 +149,8 @@ class PPN(object):
                 self.image_placeholder,
                 is_training=(self.is_training and not self.cfg.FREEZE),
                 reuse=self.reuse)
+            self.intermediate_layer = net
+            self.last_layer = net2
             with tf.variable_scope(scope, reuse=self.reuse):
 
                 self.set_dimensions(net.shape, net2.shape)
@@ -172,6 +174,7 @@ class PPN(object):
                 # Pool to Pixels of Interest of intermediate layer
                 # Shape of rpn_pooling = nb_rois, 1, 1, 256
                 rpn_pooling = crop_pool_layer(net, rois, self.dim2, self.dim)
+                self.rpn_pooling = rpn_pooling
 
                 proposals2, scores2 = self.build_ppn2(rpn_pooling, rois)
 
@@ -197,13 +200,14 @@ class PPN(object):
                                                 name="im_proposals")
                     # im_labels = tf.gather_nd(im_labels, keep, name="im_labels")
                     im_scores = tf.gather_nd(im_scores, keep, name="im_scores")
-
+                    self.before_nms = im_proposals
                     # Postprocessing of proposals
                     if self.cfg.POSTPROCESSING == 'nms':  # Pixel NMS equivalent
                         im_proposals, keep = nms(im_proposals, im_scores)
                         im_proposals = tf.gather(im_proposals, keep)
                         # im_labels = tf.gather(im_labels, keep)
                         im_scores = tf.gather(im_scores, keep)
+                        self.after_nms = im_proposals
                     else:  # Use DBSCAN
                         im_proposals, im_scores, keep = tf.py_func(
                             filter_points,
@@ -325,7 +329,7 @@ class PPN(object):
                                                  anchors,
                                                  (self.N2,) * self.dim)
             rois, roi_scores = top_R_pixels(proposals, scores,
-                                            R=20,
+                                            R=self.R,
                                             threshold=self.ppn1_score_threshold)
             assert proposals.get_shape().as_list() == [self.N3**self.dim, self.dim]
             assert scores.get_shape().as_list() == [self.N3**self.dim, 1]

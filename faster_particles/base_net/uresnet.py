@@ -19,7 +19,7 @@ class UResNet(BaseNet):
         # which determines the following layers' filter count
         self.base_num_outputs = cfg.BASE_NUM_OUTPUTS
         # how many times stride=2 is applied
-        self._num_strides = 5
+        self._num_strides = cfg.NUM_STRIDES  #5
 
     def init_placeholders(self, image=None, labels=None):
         self.image_placeholder = tf.placeholder(
@@ -186,6 +186,7 @@ class UResNet(BaseNet):
             _, net = self.build_base_net(self.image_placeholder,
                                          is_training=is_training,
                                          reuse=reuse, scope=scope)
+            print(self.conv_feature_map)
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
                 for step in xrange(self._num_strides):

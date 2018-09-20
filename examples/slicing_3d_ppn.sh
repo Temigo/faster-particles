@@ -28,5 +28,7 @@ python faster_particles/bin/ppn.py train \
   -N 512 \
   -m 1 \
   --enable-crop \
-  -ss 128 \
-  -3d
+  -ss 192 \
+  -3d \
+  -gpu '9' \
+  --profile

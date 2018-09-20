@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.client import timeline
 import os
 import glob
 import time
@@ -282,6 +283,15 @@ def inference(cfg):
     elif is_uresnet:
         metrics = UResNetMetrics(cfg)
 
+    if cfg.PROFILE:
+        print('WARNING PROFILING ENABLED')
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        # print(getargspec(self.sess.run))
+        run_metadata = tf.RunMetadata()
+        old_run = tf.Session.run
+        new_run = lambda self, fetches, feed_dict=None: old_run(self, fetches, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+        tf.Session.run = new_run
+
     crop_algorithm = cropping_algorithms[cfg.CROP_ALGO](cfg)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -326,6 +336,34 @@ def inference(cfg):
                     print(blob, results)
                 if cfg.ENABLE_CROP:
                     cfg.IMAGE_SIZE = N
+
+    if cfg.PROFILE:
+        # Create the Timeline object, and write it to a json
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        with open(cfg.PROFILE_NAME, 'w') as f:
+            f.write(ctf)
+            print("Wrote timeline to %s" % cfg.PROFILE_NAME)
+
+        # # Print to stdout an analysis of the memory usage and the timing information
+        # # broken down by python codes.
+        # ProfileOptionBuilder = tf.profiler.ProfileOptionBuilder
+        # opts = ProfileOptionBuilder(ProfileOptionBuilder.time_and_memory()
+        #     ).with_node_names(show_name_regexes=['*']).build()
+        #
+        # tf.profiler.profile(
+        #     tf.get_default_graph(),
+        #     run_meta=run_metadata,
+        #     cmd='code',
+        #     options=opts)
+        #
+        # # Print to stdout an analysis of the memory usage and the timing information
+        # # broken down by operation types.
+        # tf.profiler.profile(
+        #     tf.get_default_graph(),
+        #     run_meta=run_metadata,
+        #     cmd='op',
+        #     options=tf.profiler.ProfileOptionBuilder.time_and_memory())
 
     duration /= cfg.MAX_STEPS
     print("Average duration of inference = %f ms" % duration)

@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def crop(patch_centers, N, data, use_smear=False):
+def crop(patch_centers, N, data, use_smear=False, return_labels=True):
     """
     Slice patches of size N centered at patch_centers in data.
     Assumes data has shape (1, M, M, M, channels)
@@ -42,28 +42,29 @@ def crop(patch_centers, N, data, use_smear=False):
                                    coords0[j, 2]:coords1[j, 2],
                                    :],
                               padding, 'constant')
-        indices = np.where(crops[j] > 0)
-        # FIXME check that crop_labels still works with batch size
-        crops_labels[j][indices] = 1
-        # Define vertex window to be 3x3
-        if dim == 2:
-            indices = np.where(crops[j,
-                                     int(N/2-1-smear[0]):int(N/2+2-smear[0]),
-                                     int(N/2-1-smear[1]):int(N/2+2-smear[1]),
-                                     :] > 0)
-            a = indices[1] + int(N/2 - 1-smear[0])
-            b = indices[2] + int(N/2 - 1-smear[1])
-            crops_labels[j][a, b, indices[3]] = 2
-        else:
-            indices = np.where(crops[j,
-                                     int(N/2-1-smear[0]):int(N/2+2-smear[0]),
-                                     int(N/2-1-smear[1]):int(N/2+2-smear[1]),
-                                     int(N/2-1-smear[2]):int(N/2+2-smear[2]),
-                                     :] > 0)
-            a = indices[0] + int(N/2 - 1-smear[0])
-            b = indices[1] + int(N/2 - 1-smear[1])
-            c = indices[2] + int(N/2 - 1-smear[2])
-            crops_labels[j][a, b, c, indices[3]] = 2
+        if return_labels:
+            indices = np.where(crops[j] > 0)
+            # FIXME check that crop_labels still works with batch size
+            crops_labels[j][indices] = 1
+            # Define vertex window to be 3x3
+            if dim == 2:
+                indices = np.where(crops[j,
+                                         int(N/2-1-smear[0]):int(N/2+2-smear[0]),
+                                         int(N/2-1-smear[1]):int(N/2+2-smear[1]),
+                                         :] > 0)
+                a = indices[1] + int(N/2 - 1-smear[0])
+                b = indices[2] + int(N/2 - 1-smear[1])
+                crops_labels[j][a, b, indices[3]] = 2
+            else:
+                indices = np.where(crops[j,
+                                         int(N/2-1-smear[0]):int(N/2+2-smear[0]),
+                                         int(N/2-1-smear[1]):int(N/2+2-smear[1]),
+                                         int(N/2-1-smear[2]):int(N/2+2-smear[2]),
+                                         :] > 0)
+                a = indices[0] + int(N/2 - 1-smear[0])
+                b = indices[1] + int(N/2 - 1-smear[1])
+                c = indices[2] + int(N/2 - 1-smear[2])
+                crops_labels[j][a, b, c, indices[3]] = 2
     return crops, crops_labels
 
 

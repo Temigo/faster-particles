@@ -33,12 +33,15 @@ class PPNConfig(object):
     DISPLAY_DIR = "display"
     MAX_STEPS = 100
     LEARNING_RATE = 0.001
+    PROFILE = False
+    PROFILE_TIMELINE = 'timeline.json'
 
     # PPN
     R = 20
     # Feature map indexes:
     # 0 is stride 0 (original image size).
     # See uresnet.py to get the spatial depth.
+    # TODO Rename PPN1_INDEX (corresponds to PPN2) and PPN2_INDEX (~ PPN1)
     PPN1_INDEX = 2  # Index of the intermediate feature map in PPN
     PPN2_INDEX = -1  # Index of the final feature map in PPN
     PPN1_SCORE_THRESHOLD = 0.6
@@ -62,6 +65,7 @@ class PPNConfig(object):
     URESNET_ADD = False  # Whether to use add or concat in UResNet
     NUM_CLASSES = 3  # For base network only
     BASE_NUM_OUTPUTS = 16  # For UResNet
+    NUM_STRIDES = 5  # spatial depth for UResNet
 
     # Data configuration
     BATCH_SIZE = 1
@@ -164,10 +168,13 @@ class PPNConfig(object):
         parser.add_argument("-uw", "--uresnet-weighting", action='store_true', default=self.URESNET_WEIGHTING, help="Use pixel-wise weighting in UResNet.")
         parser.add_argument("-ua", "--uresnet-add", action='store_true', default=self.URESNET_ADD, help="Use add instead of concat in UResNet.")
         parser.add_argument("-bno", "--base-num-outputs", action='store', default=self.BASE_NUM_OUTPUTS, type=int, help="Base number of filters for UResNet.")
+        parser.add_argument("-ns", "--num-strides", action='store', default=self.NUM_STRIDES, type=int, help="Number of strides (spatial depth) for UResNet.")
         parser.add_argument("-mp", "--max-patches", action='store', default=self.MAX_PATCHES, type=int, help="Max number of patches for cropping algo (probabilistic).")
         parser.add_argument("-mo", "--min-overlap", action='store', default=self.MIN_OVERLAP, type=int, help="Min number of overlap for cropping algo (probabilistic).")
         parser.add_argument("-ppn1i", "--ppn1-index", action='store', default=self.PPN1_INDEX, type=int, help="Index of intermediate feature map for PPN1.")
         parser.add_argument("-ppn2i", "--ppn2-index", action='store', default=self.PPN2_INDEX, type=int, help="Index of last feature map for PPN2.")
+        parser.add_argument("-p", "--profile", action='store_true', default=self.PROFILE, help="Profile TF model.")
+        parser.add_argument("-pn", "--profile-name", help="Timeline name (profiling).")
 
     def parse_args(self):
         args = self.parser.parse_args()

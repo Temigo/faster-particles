@@ -6,9 +6,12 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from tensorflow.python.client import timeline
 import os
 import sys
 import numpy as np
+from functools import partial
+from inspect import getargspec
 
 from faster_particles.demo_ppn import load_weights
 from faster_particles.display_utils import draw_slicing
@@ -144,8 +147,36 @@ class Trainer(object):
             self.cfg.dim2 = self.train_net.dim2
         print("Done.")
 
+
+
+        if self.cfg.PROFILE:
+            print('WARNING PROFILING ENABLED')
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            # print(getargspec(self.sess.run))
+            run_metadata = tf.RunMetadata()
+            builder = tf.profiler.ProfileOptionBuilder
+            opts = builder(builder.time_and_memory()).order_by('micros').build()
+            pctx = tf.contrib.tfprof.ProfileContext('/data/profiler',
+                                      trace_steps=[],
+                                      dump_steps=[])
+            old_run = tf.Session.run
+            def new_run(self, fetches, feed_dict=None):
+                pctx.trace_next_step()
+                pctx.dump_next_step()
+                results = old_run(self, fetches, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+                # pctx.profiler.profile_operations(options=opts)
+                return results
+
+            # new_run = lambda self, fetches, feed_dict=None: old_run(self, fetches, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+            # self.sess.run = partial(self.sess.run,
+            #                         options=run_options,
+            #                         run_metadata=run_metadata)
+            # self.sess.run_old = self.sess.run
+            tf.Session.run = new_run
+
         # with tf.Session() as sess:
-        self.sess = tf.InteractiveSession()
+        self.sess = tf.Session()
+
         self.sess.run(tf.global_variables_initializer())
         load_weights(self.cfg, self.sess)
         summary_writer_train = tf.summary.FileWriter(
@@ -199,7 +230,7 @@ class Trainer(object):
 
             i = 0
             batch_results = []
-            while i+self.batch_size < len(batch_blobs):
+            while i+self.batch_size <= len(batch_blobs):
                 blobs = batch_blobs[i:i+self.batch_size]
                 miniblob = {}
                 for key in blobs[0]:
@@ -220,23 +251,56 @@ class Trainer(object):
                     for key in result:
                         if key in ['im_proposals', 'im_scores', 'im_labels', 'rois']:
                             r[key] = result[key]
+                        elif key in ['dim1', 'dim2']:
+                            pass
                         else:
                             r[key] = result[key][j]
                     batch_results.append(r)
 
-            final_results = crop_algorithm.reconcile(batch_results,
-                                                     patch_centers,
-                                                     patch_sizes)
+            if self.cfg.ENABLE_CROP:
+                final_results = crop_algorithm.reconcile(batch_results,
+                                                         patch_centers,
+                                                         patch_sizes)
 
-            if is_drawing:
-                self.display(blob,
-                             self.cfg,
-                             index=step,
-                             name='display_train_final',
-                             directory=os.path.join(self.cfg.DISPLAY_DIR,
-                                                    'train'),
-                             **final_results)
+                if is_drawing:
+                    self.display(blob,
+                                 self.cfg,
+                                 index=step,
+                                 name='display_train_final',
+                                 directory=os.path.join(self.cfg.DISPLAY_DIR,
+                                                        'train'),
+                                 **final_results)
 
         summary_writer_train.close()
         summary_writer_test.close()
         print("Done.")
+
+        if self.cfg.PROFILE:
+            pctx.profiler.profile_operations(options=opts)
+
+            # Create the Timeline object, and write it to a json
+            tl = timeline.Timeline(run_metadata.step_stats)
+            ctf = tl.generate_chrome_trace_format()
+            with open(self.cfg.PROFILE_TIMELINE, 'w') as f:
+                f.write(ctf)
+                print("Wrote timeline to timeline.json")
+
+            # Print to stdout an analysis of the memory usage and the timing information
+            # broken down by python codes.
+            ProfileOptionBuilder = tf.profiler.ProfileOptionBuilder
+            # opts = ProfileOptionBuilder(ProfileOptionBuilder.time_and_memory()
+            #     ).with_node_names(show_name_regexes=['.*trainer.py.*']).build()
+            opts = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
+            tf.profiler.profile(
+                tf.get_default_graph(),
+                run_meta=run_metadata,
+                cmd='code',
+                options=opts)
+
+            # Print to stdout an analysis of the memory usage and the timing information
+            # broken down by operation types.
+            tf.profiler.profile(
+                tf.get_default_graph(),
+                run_meta=run_metadata,
+                cmd='op',
+                options=tf.profiler.ProfileOptionBuilder.time_and_memory())

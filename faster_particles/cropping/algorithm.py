@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.cluster import DBSCAN
 from faster_particles.ppn_utils import crop as crop_util
 from faster_particles.display_utils import extract_voxels
 
@@ -27,6 +28,9 @@ class CroppingAlgorithm(object):
     def process(self, original_blob):
         # FIXME cfg.SLICE_SIZE vs patch_size
         patch_centers, patch_sizes = self.crop(original_blob['voxels'])
+        return self.extract(patch_centers, patch_sizes, original_blob)
+
+    def extract(self, patch_centers, patch_sizes, original_blob):
         batch_blobs = []
         for i in range(len(patch_centers)):
             patch_center, patch_size = patch_centers[i], patch_sizes[i]
@@ -39,14 +43,14 @@ class CroppingAlgorithm(object):
 
             blob['data'], _ = crop_util(np.array([patch_center]),
                                         self.cfg.SLICE_SIZE,
-                                        original_blob['data'])
+                                        original_blob['data'], return_labels=False)
             patch_center = patch_center.astype(int)
             # print(patch_center, original_blob['data'][0, patch_center[0], patch_center[1], patch_center[2], 0], np.count_nonzero(blob['data']))
             # assert np.count_nonzero(blob['data']) > 0
             if 'labels' in original_blob:
                 blob['labels'], _ = crop_util(np.array([patch_center]),
                                               self.cfg.SLICE_SIZE,
-                                              original_blob['labels'][..., np.newaxis])
+                                              original_blob['labels'][..., np.newaxis], return_labels=False)
                 blob['labels'] = blob['labels'][..., 0]
             # print(np.nonzero(blob['data']))
             # print(np.nonzero(blob['labels']))
@@ -54,7 +58,7 @@ class CroppingAlgorithm(object):
             if 'weight' in original_blob:
                 blob['weight'], _ = crop_util(np.array([patch_center]),
                                               self.cfg.SLICE_SIZE,
-                                              original_blob['weight'][..., np.newaxis])
+                                              original_blob['weight'][..., np.newaxis], return_labels=False)
                 blob['weight'] = blob['weight'][..., 0]
 
 
@@ -65,7 +69,10 @@ class CroppingAlgorithm(object):
                     original_blob['gt_pixels'][:, :-1] < patch_center + patch_size/2.0), axis=1))
                 blob['gt_pixels'] = original_blob['gt_pixels'][indices]
                 blob['gt_pixels'][:, :-1] = blob['gt_pixels'][:, :-1] - (patch_center - patch_size / 2.0)
-
+                # Add artificial gt pixels
+                artificial_gt_pixels = self.add_gt_pixels(original_blob, blob, patch_center, self.cfg.SLICE_SIZE)
+                if artificial_gt_pixels.shape[0]:
+                    blob['gt_pixels'] = np.concatenate([blob['gt_pixels'], artificial_gt_pixels], axis=0)
             # Select voxels
             # Flip patch_center coordinates back to normal
             patch_center = np.flipud(patch_center)
@@ -87,7 +94,6 @@ class CroppingAlgorithm(object):
             # Make sure there is at least one ground truth pixel in the patch (for training)
             if self.cfg.NET not in ['ppn', 'ppn_ext', 'full'] or len(blob['gt_pixels']) > 0:
                 batch_blobs.append(blob)
-
         return batch_blobs, patch_centers, patch_sizes
 
     def compute_overlap(self, coords, patch_centers, sizes=None):
@@ -104,6 +110,31 @@ class CroppingAlgorithm(object):
                 patch_centers + sizes >= voxel
                 ), axis=1)))
         return dict(zip(*np.unique(overlap, return_counts=True)))
+
+    def add_gt_pixels(self, original_blob, blob, patch_center, patch_size):
+        """
+        Add artificial pixels after cropping
+        """
+        # Case 1: crop boundaries is intersecting with data
+        nonzero_idx = np.array(np.where(blob['data'][0, ..., 0] > 0.0)).T  # N x 3
+        border_idx = nonzero_idx[np.any(np.logical_or(nonzero_idx == 0, nonzero_idx == self.cfg.IMAGE_SIZE - 1), axis=1)]
+
+        # Case 2: crop is partially outside of original data (thus padded)
+        # if patch_center is within patch_size of boundaries of original blob
+        # boundary intesecting with data
+        padded_idx = nonzero_idx[np.any(np.logical_or(nonzero_idx + patch_center - patch_size / 2.0 >= self.cfg.IMAGE_SIZE - 2, nonzero_idx + patch_center - patch_size / 2.0 <= 1), axis=1)]
+        # dbscan on all found voxels from case 1 and 2
+        coords = np.concatenate([border_idx, padded_idx], axis=0)
+        artificial_gt_pixels = []
+        if coords.shape[0]:
+            db = DBSCAN(eps=10, min_samples=3).fit_predict(coords)
+            for v in np.unique(db):
+                cluster = coords[db == v]
+                artificial_gt_pixels.append(cluster[np.argmax(blob['data'][0, ..., 0][cluster.T[0], cluster.T[1], cluster.T[2]]), :])
+
+            artificial_gt_pixels = np.concatenate([artificial_gt_pixels, np.ones((len(artificial_gt_pixels), 1))], axis=1)
+
+        return np.array(artificial_gt_pixels)
 
     def reconcile(self, batch_results, patch_centers, patch_sizes):
         """
@@ -153,7 +184,7 @@ class CroppingAlgorithm(object):
 
         # PPN
         if 'im_proposals' and 'im_scores' and 'im_labels' and 'rois' in batch_results[0]:
-            print(batch_results[0]['im_proposals'].shape, batch_results[0]['im_scores'].shape, batch_results[0]['im_labels'].shape, batch_results[0]['rois'].shape)
+            # print(batch_results[0]['im_proposals'].shape, batch_results[0]['im_scores'].shape, batch_results[0]['im_labels'].shape, batch_results[0]['rois'].shape)
             final_im_proposals = np.array([], dtype=np.float32).reshape(0, 3)
             final_im_scores = np.array([], dtype=np.float32).reshape(0,)
             final_im_labels = np.array([], dtype=np.int32).reshape(0,)
@@ -161,7 +192,7 @@ class CroppingAlgorithm(object):
             for i, result in enumerate(batch_results):
                 im_proposals = result['im_proposals'] + np.flipud(patch_centers[i]) - patch_sizes[i] / 2.0
                 im_proposals = np.clip(im_proposals, 0, self.cfg.IMAGE_SIZE-1)
-                print(final_im_proposals, im_proposals)
+                # print(final_im_proposals, im_proposals)
                 final_im_proposals = np.concatenate([final_im_proposals, im_proposals], axis=0)
                 final_im_scores = np.concatenate([final_im_scores, result['im_scores']], axis=0)
                 final_im_labels = np.concatenate([final_im_labels, result['im_labels']], axis=0)
