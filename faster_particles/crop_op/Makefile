@@ -9,6 +9,7 @@ CFLAGS    = -std=c++11 -I$(TF_INC) -D_GLIBCXX_USE_CXX11_ABI=0
 GPUCFLAGS = -c
 LFLAGS    =  -shared -fPIC -ltensorflow_framework -I$(TF_INC) -I$(TF_INC)/external/nsync/public -L$(TF_LIB) -L/usr/local/cuda/lib64 -I/usr/local/cuda/include
 GPULFLAGS = -x cu -shared -Xcompiler -fPIC -ltensorflow_framework -I$(TF_INC) -I$(TF_INC)/external/nsync/public -L$(TF_LIB)
+DEBUG = -g -G
 GPUDEF    = -D GOOGLE_CUDA=1
 CGPUFLAGS = -lcudart
 

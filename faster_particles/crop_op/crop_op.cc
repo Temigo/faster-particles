@@ -1,4 +1,5 @@
 #include "crop_op.h"
+#include <iostream>
 
 using namespace tensorflow;
 
@@ -22,11 +23,15 @@ template <typename T>
 struct CropFunctor<CPUDevice, T> {
   void operator()(
     const CPUDevice& d,
+    /*typename TTypes<T, 4>::ConstTensor image_ptr,
+    typename TTypes<int, 2>::ConstTensor crop_centers_ptr,
+    int crop_size,
+    typename TTypes<T, 5>::Tensor crops_ptr*/
     const T* image_ptr,
     const int* crop_centers_ptr,
+    int crop_size,
     int image_size,
     int channels,
-    int crop_size,
     int num_crops,
     T* crops_ptr
   ) {
@@ -48,12 +53,22 @@ class CropOp : public OpKernel {
     const Tensor& image = context->input(0);
     const Tensor& crop_centers = context->input(1);
     const Tensor& crop_size_tensor = context->input(2);
-    const int crop_size = static_cast<int>(crop_size_tensor.flat<int>()(0));
+    // FIXME
+    OP_REQUIRES(context, TensorShapeUtils::IsScalar(crop_size_tensor.shape()), errors::InvalidArgument("crop_size must be scalar, has shape ", crop_size_tensor.shape().DebugString()));
+    //const int crop_size = crop_size_tensor.scalar<int32>()();
+    const int crop_size = 64;
+
+    // Basic shape checks on input image and crop centers
+    // OP_REQUIRES(context, image.dims() == 4, errors::InvalidArgument("Input image must be 4-D", image.shape().DebugString()));
+    // //OP_REQUIRES(context, image.dim_size(0) == image.dim_size(1) == image.dim_size(2), errors::InvalidArgument("Expected square input tensor."));
+    // OP_REQUIRES(context, crop_centers.dims() == 2, errors::InvalidArgument("Expected shape of size 2 for crop centers."));
+    // OP_REQUIRES(context, crop_size <= image.dim_size(0), errors::InvalidArgument("Crops size must be less or equal than image size."));
+    // OP_REQUIRES(context, crop_centers.dim_size(1) == image.dims() - 1, errors::InvalidArgument("Crop centers dimensions must match image dimensions."));
 
     // Get shapes of input tensors
     const TensorShape& image_shape = image.shape();
     const TensorShape& crop_centers_shape = crop_centers.shape();
-    int image_size = image_shape.dim_size(0);
+    int image_size = image_shape.dim_size(1);
     int channels = image_shape.dim_size(3);
     int num_crops = crop_centers_shape.dim_size(0);
     int dim = crop_centers_shape.dim_size(1);
@@ -71,22 +86,22 @@ class CropOp : public OpKernel {
                                                      &crops));
 
     // Do the computation.
-    OP_REQUIRES(context, image.NumElements() <= tensorflow::kint32max,
-                errors::InvalidArgument("Too many elements in input tensor"));
-    OP_REQUIRES(context, crop_centers.NumElements() <= tensorflow::kint32max,
-                errors::InvalidArgument("Too many elements in crop centers tensor"));
+    // OP_REQUIRES(context, image.NumElements() <= tensorflow::kint32max,
+    //             errors::InvalidArgument("Too many elements in input tensor"));
+    // OP_REQUIRES(context, crop_centers.NumElements() <= tensorflow::kint32max,
+    //             errors::InvalidArgument("Too many elements in crop centers tensor"));
 
     CropFunctor<Device, T>()(
         context->eigen_device<Device>(),
-        //static_cast<int>(input_tensor.NumElements()),
         image.flat<T>().data(),
         crop_centers.flat<int>().data(),
+        crop_size,
         image_size,
         channels,
-        crop_size,
         num_crops,
         crops->flat<T>().data()
       );
+
   }
 };
 
