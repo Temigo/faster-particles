@@ -11,6 +11,7 @@ from tensorflow.python.client import timeline
 import os
 import glob
 import time
+from sklearn.cluster import DBSCAN
 
 from faster_particles.display_utils import display, display_uresnet, \
                                             display_ppn_uresnet
@@ -21,6 +22,7 @@ from faster_particles.metrics import PPNMetrics, UResNetMetrics
 from faster_particles.data import ToydataGenerator, LarcvGenerator, \
                                 HDF5Generator, CSVGenerator
 from faster_particles.cropping import cropping_algorithms
+from faster_particles.display_utils import extract_voxels
 
 
 def get_data(cfg):
@@ -47,6 +49,9 @@ def get_data(cfg):
 
 
 def load_weights(cfg, sess):
+    """
+    Restore TF weights stored in checkpoint file.
+    """
     print("Restoring checkpoint file...")
     scopes = []
     if cfg.WEIGHTS_FILE_PPN is not None:
@@ -100,6 +105,9 @@ def inference_full(cfg):
     # if cfg.WEIGHTS_FILE_BASE is None or cfg.WEIGHTS_FILE_PPN is None:
     #     raise Exception("Need both weights files for full inference.")
 
+    if not os.path.isdir(cfg.DISPLAY_DIR):
+        os.makedirs(cfg.DISPLAY_DIR)
+
     num_test = cfg.MAX_STEPS
     inference_base, inference_ppn, blobs = [], [], []
     weights_file_ppn = cfg.WEIGHTS_FILE_PPN
@@ -115,20 +123,19 @@ def inference_full(cfg):
     net_base = basenets[cfg.BASE_NET](cfg=cfg)
     inference_base = inference_simple(cfg, blobs, net_base, num_test=num_test)
     print("Done.")
-    print(inference_base)
+
     tf.reset_default_graph()
+
     print("PPN network...")
     cfg.WEIGHTS_FILE_PPN = weights_file_ppn
     net_ppn = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
     inference_ppn = inference_simple(cfg, blobs, net_ppn, num_test=num_test)
     print("Done.")
-    print(inference_ppn)
 
     # Display
     print("Saving displays...")
     metrics = PPNMetrics(cfg, dim1=net_ppn.dim1, dim2=net_ppn.dim2)
     for i in range(num_test):
-        # results = {**inference_base[i], **inference_ppn[i]}
         results = inference_base[i].copy()
         results.update(inference_ppn[i])
         display_ppn_uresnet(
@@ -139,6 +146,7 @@ def inference_full(cfg):
             **results
         )
         metrics.add(blobs[i], results)
+        cluster(cfg, blobs[i], results, i, name='cluster_full')
     metrics.plot()
     print("Done.")
     # Clustering: k-means? DBSCAN?
@@ -252,6 +260,57 @@ def inference_ppn_ext(cfg):
             cfg.IMAGE_SIZE = N
 
 
+def cluster(cfg, blob, results, index, name='cluster'):
+    """
+    Ad-hoc clustering algorithm. Can use UResNet predictions as a mask for
+    to cluster track and shower separately, if results includes `predictions`
+    key. Erases a 7x7 window around each point predicted by PPN in the data,
+    then applies DBSCAN algorithm to perform rough clustering of track/shower
+    instances.
+    """
+    data = blob['data']
+    WINDOW_SIZE = 7
+    # Hide window around each proposal
+    for p in results['im_proposals']:
+        p1 = (p - WINDOW_SIZE/2).astype(int)
+        p2 = (p + WINDOW_SIZE/2).astype(int)
+        print(p1, p2)
+        if cfg.DATA_3D:
+            data[0, p1[0]:p2[0], p1[1]:p2[1], p1[2]:p2[2], 0] = 0.0
+        else:
+            data[0, p1[0]:p2[0], p1[1]:p2[1], 0] = 0.0
+
+    if 'predictions' in results:  # UResNet mask
+        predictions = results['predictions'][0, ...]
+        predictions[data[0, ..., 0] == 0.0] = 0.0  # mask with data
+        track_voxels = np.argwhere(predictions == 1)  # track
+        shower_voxels = np.argwhere(predictions == 2)  # track
+        db_track = DBSCAN(eps=2.5 if cfg.DATA_3D else 2.0,
+                          min_samples=10).fit_predict(track_voxels)
+        db_shower = DBSCAN(eps=2.5 if cfg.DATA_3D else 2.0,
+                           min_samples=10).fit_predict(shower_voxels)
+        db_shower = db_shower + len(np.unique(db_track))  # offset labels
+        voxels = np.concatenate([track_voxels, shower_voxels], axis=0)
+        voxels = np.flip(voxels, axis=1)
+        db = np.concatenate([db_track, db_shower], axis=0)
+    else:
+        voxels, _ = extract_voxels(data[0, ..., 0])
+        voxels = np.flip(voxels, axis=1)
+        db = DBSCAN(eps=2.5 if cfg.DATA_3D else 2.0,
+                    min_samples=10).fit_predict(voxels)
+
+    print("Clusters: ", np.unique(db))
+    blob['data'] = data
+    blob['voxels'] = voxels
+    blob['voxels_value'] = db
+    display_uresnet(blob, cfg,
+                    compute_voxels=False,
+                    directory=os.path.join(cfg.DISPLAY_DIR, name),
+                    vmin=np.amin(db),
+                    vmax=np.amax(db),
+                    index=index)
+
+
 def inference(cfg):
     """
     Inference for either PPN or (xor) base network (e.g. UResNet)
@@ -269,6 +328,7 @@ def inference(cfg):
         if cfg.WEIGHTS_FILE_PPN is None:
             pass
             # raise Exception("Need a checkpoint file for PPN at least")
+
     elif cfg.NET == 'base':
         net = basenets[cfg.BASE_NET](cfg=cfg)
         if cfg.WEIGHTS_FILE_PPN is None and cfg.WEIGHTS_FILE_BASE is None:
@@ -329,8 +389,12 @@ def inference(cfg):
                         **results
                     )
                     metrics.add(blob, results)
+                    cluster(cfg, blob, results, real_step)
                 elif is_uresnet:
-                    display_uresnet(blob, cfg, index=real_step, **results)
+                    display_uresnet(blob, cfg,
+                                    index=real_step,
+                                    directory=os.path.join(cfg.DISPLAY_DIR, 'demo'),
+                                    **results)
                     metrics.add(blob, results)
                 else:
                     print(blob, results)

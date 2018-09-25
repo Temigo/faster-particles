@@ -171,6 +171,7 @@ class UResNet(BaseNet):
         keys = np.sort(self.conv_feature_map.keys())
         key2 = keys[self.cfg.PPN2_INDEX]
         key = keys[self.cfg.PPN1_INDEX]
+        self.net = net
         return self.conv_feature_map[key], self.conv_feature_map[key2]
 
     def create_architecture(self, is_training=True, reuse=False,
@@ -183,9 +184,10 @@ class UResNet(BaseNet):
                              slim.fully_connected],
                             normalizer_fn=slim.batch_norm,
                             trainable=is_training):
-            _, net = self.build_base_net(self.image_placeholder,
+            _, _ = self.build_base_net(self.image_placeholder,
                                          is_training=is_training,
                                          reuse=reuse, scope=scope)
+            net = self.net
             print(self.conv_feature_map)
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
