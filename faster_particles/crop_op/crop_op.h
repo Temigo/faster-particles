@@ -1,17 +1,11 @@
 #ifndef CROP_OP_H_
 #define CROP_OP_H_
 
-// FIXME which one exactly is necessary?
-#include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/framework/tensor_types.h"
-#include "tensorflow/core/platform/types.h"
-
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/framework/shape_inference.h"
 #include <iostream>
 
 using namespace tensorflow;
+
 template <typename Device, typename T>
 struct CropFunctor {
   void operator()(

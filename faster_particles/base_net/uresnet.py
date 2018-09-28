@@ -188,7 +188,6 @@ class UResNet(BaseNet):
                                          is_training=is_training,
                                          reuse=reuse, scope=scope)
             net = self.net
-            print(self.conv_feature_map)
             with tf.variable_scope(scope, reuse=self.reuse):
                 # Decoding steps
                 for step in xrange(self._num_strides):

@@ -1,5 +1,4 @@
 #include "crop_op.h"
-#include <iostream>
 
 using namespace tensorflow;
 
@@ -23,10 +22,6 @@ template <typename T>
 struct CropFunctor<CPUDevice, T> {
   void operator()(
     const CPUDevice& d,
-    /*typename TTypes<T, 4>::ConstTensor image_ptr,
-    typename TTypes<int, 2>::ConstTensor crop_centers_ptr,
-    int crop_size,
-    typename TTypes<T, 5>::Tensor crops_ptr*/
     const T* image_ptr,
     const int* crop_centers_ptr,
     int crop_size,
@@ -35,9 +30,7 @@ struct CropFunctor<CPUDevice, T> {
     int num_crops,
     T* crops_ptr
   ) {
-    /*for (int crop_idx = 0; crop_idx < num_crops; ++crop_idx) {
-      const int center_x = crop_centers_ptr[crop_idx*3];
-    }*/
+
   }
 };
 
@@ -106,8 +99,8 @@ class CropOp : public OpKernel {
 };
 
 // Register the CPU kernels.
-#define REGISTER_CPU(T)                                          \
-  REGISTER_KERNEL_BUILDER(                                       \
+#define REGISTER_CPU(T) \
+  REGISTER_KERNEL_BUILDER( \
       Name("Crop") \
       .Device(DEVICE_CPU) \
       .TypeConstraint<T>("T"), \

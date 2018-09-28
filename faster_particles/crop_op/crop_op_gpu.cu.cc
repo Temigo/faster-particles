@@ -1,8 +1,8 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
+
 #include "crop_op.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h" // for CUDA_1D_KERNEL_LOOP
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor" // FIXME necessary?
+#include "tensorflow/core/util/cuda_kernel_helper.h"
 
 using namespace tensorflow;
 

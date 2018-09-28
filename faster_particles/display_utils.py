@@ -157,28 +157,9 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
         if compute_voxels:
             blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0,...,0])
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax, vmin=vmin, vmax=vmax)
-    set_image_limits(cfg, ax)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_original_%d.png' % index), bbox_inches='tight')
-    plt.close(fig)
+    display_blob(blob, cfg, directory=directory, name=name, index=index, **kwargs)
 
-    if 'labels' in blob:
-        fig2 = plt.figure()
-        ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-        blob_label = {}
-        if cfg.DATA_3D:
-            blob_label['data'] = blob['labels'][0, ...]
-            blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0, ...])
-        else:
-            blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
-        display_original_image(blob_label, cfg, ax2, vmax=np.unique(blob_label['data']).shape[0]-1, cmap='tab10')
-        set_image_limits(cfg, ax2)
-        # Use dpi=1000 for high resolution
-        plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')
-        plt.close(fig2)
+    display_labels(blob, cfg, directory=directory, name=name, index=index, **kwargs)
 
     if 'weight' in blob:
         print("-- Weights:")
@@ -198,24 +179,7 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
         plt.close(fig5)
         print("-- OK.")
 
-    if predictions is not None:
-        print("-- Predictions:")
-        fig3 = plt.figure()
-        ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
-        blob_pred = {}
-        if cfg.DATA_3D:
-            blob_pred['data'] = predictions[0, ...]
-            blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0, ...])
-        else:
-            blob_pred['data'] = predictions[:, :, :, np.newaxis]
-        print("-- Displaying...")
-        display_original_image(blob_pred, cfg, ax3, vmax=3.1)
-        set_image_limits(cfg, ax3)
-        print("-- Saving...")
-        # Use dpi=1000 for high resolution
-        plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
-        plt.close(fig3)
-        print("--- OK.")
+    display_predictions(blob, cfg, predictions, directory=directory, name=name, index=index, **kwargs)
 
     # if scores is not None:
     #     fig4 = plt.figure()
@@ -236,10 +200,9 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
 def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=None,
             index=0, dim1=8, dim2=4, name='display', directory=''):
     print("gt_pixels: ", blob['gt_pixels'])
-    #print("rois : ", rois*dim1*dim2)
     print("im_proposals: ", im_proposals)
     print("im_scores: ", im_scores)
-    #print(im_labels)
+
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:
@@ -251,15 +214,7 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
         kwargs['projection'] = '3d'
 
     # --- FIGURE 1 : PPN1 ROI ---
-    fig = plt.figure()
-    ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
-    display_gt_pixels(cfg, ax, blob['gt_pixels'])
-    display_rois(cfg, ax, rois, dim1, dim2)
-    set_image_limits(cfg, ax)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_proposals_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
-    plt.close(fig)
+    display_blob_rois(blob, cfg, rois, dim1, dim2, directory=directory, name=name, index=index, **kwargs)
 
     # --- FIGURE 2 : PPN2 predictions ---
     fig2 = plt.figure()
@@ -274,9 +229,85 @@ def display(blob, cfg, im_proposals=None, rois=None, im_labels=None, im_scores=N
     return im_proposals
 
 
+def display_labels(blob, cfg, directory=None, name='display', index=0, **kwargs):
+    if 'labels' in blob:
+        fig2 = plt.figure()
+        ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
+        blob_label = {}
+        if cfg.DATA_3D:
+            blob_label['data'] = blob['labels'][0, ...]
+            blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0, ...])
+            blob_label['voxels'][:, [0, 1, 2]] = blob_label['voxels'][:, [2, 1, 0]]
+        else:
+            blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
+        display_original_image(blob_label, cfg, ax2, vmax=np.unique(blob_label['data']).shape[0]-1, cmap='tab10')
+        if 'gt_pixels' in blob:
+            display_gt_pixels(cfg, ax2, blob['gt_pixels'])
+        set_image_limits(cfg, ax2)
+        if directory is None:
+            plt.show()
+        else:
+            # Use dpi=1000 for high resolution
+            plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')
+        plt.close(fig2)
+
+
+def display_predictions(blob, cfg, predictions, im_proposals=None, im_scores=None, im_labels=None, directory=None, name='display', index=0, **kwargs):
+    fig3 = plt.figure()
+    ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
+    blob_pred = {}
+    if cfg.DATA_3D:
+        blob_pred['data'] = predictions[0,...]
+        blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0,...])
+        blob_pred['voxels'][:, [0, 1, 2]] = blob_pred['voxels'][:, [2, 1, 0]]
+    else:
+        blob_pred['data'] = predictions[:, :, :, np.newaxis]
+    display_original_image(blob_pred, cfg, ax3, vmax=3.1)
+    if im_proposals is not None and im_scores is not None and im_labels is not None:
+        display_im_proposals(cfg, ax3, im_proposals, im_scores, im_labels)
+    set_image_limits(cfg, ax3)
+    if directory is None:
+        plt.show()
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
+    plt.close(fig3)
+
+
+def display_blob(blob, cfg, directory=None, name='display', index=0, cmap='jet', **kwargs):
+    fig = plt.figure()
+    if cfg.DATA_3D and 'voxels' not in blob:
+        blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0, ..., 0])
+        blob['voxels'][:, [0, 1, 2]] = blob['voxels'][:, [2, 1, 0]]
+    ax = fig.add_subplot(111, aspect='equal', **kwargs)
+    display_original_image(blob, cfg, ax, vmin=np.amin(blob['voxels_value']), vmax=np.amax(blob['voxels_value']), cmap=cmap)
+    set_image_limits(cfg, ax)
+    if directory is None:
+        plt.show()
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_original_%d.png' % index), bbox_inches='tight')
+    plt.close(fig)
+
+
+def display_blob_rois(blob, cfg, rois, dim1, dim2, directory=None, name='display', index=0, **kwargs):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, aspect='equal', **kwargs)
+    display_original_image(blob, cfg, ax, vmin=0, vmax=1)
+    display_gt_pixels(cfg, ax, blob['gt_pixels'])
+    display_rois(cfg, ax, rois, dim1, dim2)
+    set_image_limits(cfg, ax)
+    if directory is None:
+        plt.show()
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_proposals_%d_%d.png' % (index, blob['entries'][0])), bbox_inches='tight')
+    plt.close(fig)
+
+
 def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
     index=0, dim1=8, dim2=4, predictions=None, im_labels=None, name='display',
-    directory='', softmax=None, scores=None):
+    directory=None, softmax=None, scores=None):
     if directory == '':
         directory = cfg.DISPLAY_DIR
     else:
@@ -290,47 +321,11 @@ def display_ppn_uresnet(blob, cfg, im_proposals=None, rois=None, im_scores=None,
 
     plt.axis('off')
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, aspect='equal', **kwargs)
-    display_original_image(blob, cfg, ax, vmin=0, vmax=400, cmap='jet')
-    set_image_limits(cfg, ax)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_original_%d.png' % index), bbox_inches='tight')
-    plt.close(fig)
+    display_blob(blob, cfg, directory=directory, name=name, index=index, **kwargs)
 
-    fig2 = plt.figure()
-    ax2 = fig2.add_subplot(111, aspect='equal', **kwargs)
-    blob_label = {}
-    if cfg.DATA_3D:
-        blob_label['data'] = blob['labels'][0,...]
-        #blob_label['voxels'] = blob['voxels']
-        #blob_label['voxels_value'] = blob_label['data'][blob['voxels'].T]
-        blob_label['voxels'], blob_label['voxels_value'] = extract_voxels(blob['labels'][0,...])
-        blob_label['voxels'][:, [0, 1, 2]] = blob_label['voxels'][:, [2, 1, 0]]
-    else:
-        blob_label['data'] = blob['labels'][:, :, :, np.newaxis]
-    display_original_image(blob_label, cfg, ax2, vmax=3.1, cmap='tab10')
-    display_gt_pixels(cfg, ax2, blob['gt_pixels'])
-    set_image_limits(cfg, ax2)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_labels_%d.png' % index), bbox_inches='tight')
-    plt.close(fig2)
+    display_labels(blob, cfg, directory=directory, name=name, index=index, **kwargs)
 
-    fig3 = plt.figure()
-    ax3 = fig3.add_subplot(111, aspect='equal', **kwargs)
-    blob_pred = {}
-    if cfg.DATA_3D:
-        blob_pred['data'] = predictions[0,...]
-        blob_pred['voxels'], blob_pred['voxels_value'] = extract_voxels(predictions[0,...])
-        blob_pred['voxels'][:, [0, 1, 2]] = blob_pred['voxels'][:, [2, 1, 0]]
-    else:
-        blob_pred['data'] = predictions[:, :, :, np.newaxis]
-    display_original_image(blob_pred, cfg, ax3, vmax=3.1)
-    display_im_proposals(cfg, ax3, im_proposals, im_scores, im_labels)
-    set_image_limits(cfg, ax3)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_predictions_%d.png' % index), bbox_inches='tight')
-    plt.close(fig3)
+    display_predictions(blob, cfg, predictions, im_proposals=im_proposals, im_scores=im_scores, im_labels=im_labels, directory=directory, name=name, index=index, **kwargs)
 
     return im_proposals
 
@@ -378,10 +373,9 @@ def compute_voxel_core(coords, patch_centers, core_size):
 
 
 def draw_slicing(blob, cfg, patch_centers, patch_sizes,
-                 name='display', directory='', index=0):
-    if directory == '':
-        directory = cfg.DISPLAY_DIR
-    else:
+                 name='display', directory=None, index=0):
+
+    if directory is not None:
         if not os.path.isdir(directory):
             os.makedirs(directory)
 
@@ -399,10 +393,14 @@ def draw_slicing(blob, cfg, patch_centers, patch_sizes,
         else:
             draw_cube(ax, p - patch_sizes[i]/2.0, patch_sizes[i])
     set_image_limits(cfg, ax)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory,
-                             name + '_patches_%d_%d.png' % (index, blob['entries'][0])),
-                bbox_inches='tight')
+    if directory is None:
+        print("Crops")
+        plt.show()
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory,
+                                 name + '_patches_%d_%d.png' % (index, blob['entries'][0])),
+                    bbox_inches='tight')
     plt.close(fig)
 
     # 2. Plot overlap values for each voxel
@@ -419,9 +417,13 @@ def draw_slicing(blob, cfg, patch_centers, patch_sizes,
     colorbar.set_array([])
     fig2.colorbar(colorbar, ax=ax2)
     set_image_limits(cfg, ax2)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_overlap_%d.png' % index),
-                bbox_inches='tight')
+    if directory is None:
+        print("Number of crops to which a voxel belongs (overlap)")
+        plt.show()
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_overlap_%d.png' % index),
+                    bbox_inches='tight')
     plt.close(fig2)
 
     # 3. Whether each voxel belongs to at least 1 core region
@@ -438,7 +440,10 @@ def draw_slicing(blob, cfg, patch_centers, patch_sizes,
     # colorbar.set_array([])
     # fig2.colorbar(colorbar, ax=ax2)
     set_image_limits(cfg, ax3)
-    # Use dpi=1000 for high resolution
-    plt.savefig(os.path.join(directory, name + '_core_%d.png' % index),
-                bbox_inches='tight')
+    if directory is None:
+        pass
+    else:
+        # Use dpi=1000 for high resolution
+        plt.savefig(os.path.join(directory, name + '_core_%d.png' % index),
+                    bbox_inches='tight')
     plt.close(fig3)

@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-from demo_ppn import inference, inference_full, inference_ppn_ext
+from demo_ppn import inference
 from train_net import train
 
 
@@ -96,8 +96,15 @@ class PPNConfig(object):
     # Environment variables
     GPU = '1'
 
-    def __init__(self):
-        self.create_parsers()
+    def __init__(self, **kwargs):
+        # Set random seed for reproducibility
+        np.random.seed(self.SEED)
+        tf.set_random_seed(self.SEED)
+
+        if kwargs:
+            self.__dict__.update(kwargs)
+        else:
+            self.create_parsers()
 
     def create_parsers(self):
         self.parser = argparse.ArgumentParser(description="Pixel Proposal Network")
@@ -118,14 +125,14 @@ class PPNConfig(object):
         self.train_parser.add_argument("-f", "--freeze", default=self.FREEZE, action='store_true', help="Freeze the base net weights.")
 
         self.demo_parser = subparsers.add_parser("demo", help="Run Pixel Proposal Network demo.")
-        self.demo_full_parser = subparsers.add_parser("demo-full", help="Run Pixel Proposal Network combined with base UResNet demo.")
+        # self.demo_full_parser = subparsers.add_parser("demo-full", help="Run Pixel Proposal Network combined with base UResNet demo.")
 
         self.common_arguments(self.train_parser)
         self.common_arguments(self.demo_parser)
-        self.common_arguments(self.demo_full_parser)
+        # self.common_arguments(self.demo_full_parser)
 
         self.demo_parser.set_defaults(func=inference)
-        self.demo_full_parser.set_defaults(func=inference_full)
+        # self.demo_full_parser.set_defaults(func=inference_full)
         self.train_parser.set_defaults(func=train)
 
     def common_arguments(self, parser):
@@ -183,15 +190,9 @@ class PPNConfig(object):
         for v in vars(self):
             print("%s = %r" % (v, getattr(self, v)))
         print("\n\n")
-        if self.NET == 'ppn_ext' and args.script == 'demo':
-            args.func = inference_ppn_ext
         if self.FREEZE and self.WEIGHTS_FILE_BASE is None:
             print("WARNING You are freezing the base net weights \
                   without loading any checkpoint file.")
-
-        # Set random seed for reproducibility
-        np.random.seed(self.SEED)
-        tf.set_random_seed(self.SEED)
 
         os.environ['CUDA_VISIBLE_DEVICES'] = self.GPU
 
