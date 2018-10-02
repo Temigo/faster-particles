@@ -276,7 +276,7 @@ def display_predictions(blob, cfg, predictions, im_proposals=None, im_scores=Non
 
 def display_blob(blob, cfg, directory=None, name='display', index=0, cmap='jet', **kwargs):
     fig = plt.figure()
-    if cfg.DATA_3D and 'voxels' not in blob:
+    if cfg.DATA_3D and ('voxels' not in blob or 'voxels_value' not in blob):
         blob['voxels'], blob['voxels_value'] = extract_voxels(blob['data'][0, ..., 0])
         blob['voxels'][:, [0, 1, 2]] = blob['voxels'][:, [2, 1, 0]]
     ax = fig.add_subplot(111, aspect='equal', **kwargs)
