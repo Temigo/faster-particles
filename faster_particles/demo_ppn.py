@@ -11,6 +11,7 @@ from tensorflow.python.client import timeline
 import os
 import glob
 import time
+import re
 from sklearn.cluster import DBSCAN
 
 from faster_particles.display_utils import display, display_uresnet, \
@@ -122,6 +123,47 @@ def inference_simple(cfg, blobs, net, num_test=10, scope=None, test_image=None, 
     return inference
 
 
+def inference_detail_log(cfg, blobs, weights_dir, net, num_tests):
+    print('Hi')
+    weights = glob.glob(os.path.join(weights_dir, "*.ckpt.meta"))
+    if cfg.NET in ['full', 'base']:
+        metrics_uresnet = UResNetMetrics(cfg)
+    if cfg.NET in ['full', 'ppn', 'ppn_ext']:
+        metrics_ppn = PPNMetrics(cfg, dim1=net.dim1, dim2=net.dim2)
+
+    net.init_placeholders()
+    net.create_architecture(is_training=False)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+        for i_w, w in enumerate(weights):
+            print("%d/%d" % (i_w, len(weights)))
+            w = w[:-5]
+            step = int(re.findall(r'model-(\d+)', w)[0])
+            print(w, step)
+            if cfg.NET in ['full', 'base']:
+                cfg.WEIGHTS_FILE_BASE = w
+            if cfg.NET in ['full', 'ppn', 'ppn_ext']:
+                cfg.WEIGHTS_FILE_PPN = w
+            load_weights(cfg, sess)
+            # inference_results = inference_simple(cfg, blobs, net, num_test=num_tests)
+            for i in range(num_tests):
+                for j, blob in enumerate(blobs[i]):
+                    summary, r = net.test_image(sess, blob)
+                    if cfg.NET in ['full', 'base']:
+                        metrics_uresnet.add(blob, r)
+                    if cfg.NET in ['full', 'ppn', 'ppn_ext']:
+                        metrics_ppn.add(blob, r)
+            if cfg.NET in ['full', 'base']:
+                metrics_uresnet.snapshot(step)
+            if cfg.NET in ['full', 'ppn', 'ppn_ext']:
+                metrics_ppn.snapshot(step)
+    if cfg.NET in ['full', 'base']:
+        metrics_uresnet.plot_snapshot()
+    if cfg.NET in ['full', 'ppn', 'ppn_ext']:
+        metrics_ppn.plot_snapshot()
+
+
 def inference(cfg):
     """
     Inference for `ppn`, `base`, `full`.
@@ -177,6 +219,8 @@ def inference(cfg):
         print("Base network...")
         cfg.WEIGHTS_FILE_PPN = None
         net_base = basenets[cfg.BASE_NET](cfg=cfg)
+        if cfg.DETAIL_LOG:
+            return inference_detail_log(cfg, blobs, cfg.WEIGHTS_FILE_BASE, net_base, num_test)
         inference_base = inference_simple(cfg, blobs, net_base, num_test=num_test)
         print("Done.")
 
@@ -188,6 +232,8 @@ def inference(cfg):
         print("PPN network...")
         cfg.WEIGHTS_FILE_PPN = weights_file_ppn
         net_ppn = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
+        if cfg.DETAIL_LOG:
+            return inference_detail_log(cfg, blobs, cfg.WEIGHTS_FILE_PPN, net_ppn, num_test)
         inference_ppn = inference_simple(cfg, blobs, net_ppn, num_test=num_test)
         print("Done.")
 

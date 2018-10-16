@@ -35,6 +35,7 @@ class PPNConfig(object):
     LEARNING_RATE = 0.001
     PROFILE = False
     PROFILE_TIMELINE = 'timeline.json'
+    DETAIL_LOG = False
 
     # PPN
     R = 20
@@ -66,6 +67,7 @@ class PPNConfig(object):
     NUM_CLASSES = 3  # For base network only
     BASE_NUM_OUTPUTS = 16  # For UResNet
     NUM_STRIDES = 5  # spatial depth for UResNet
+    SPARSE = False
 
     # Data configuration
     BATCH_SIZE = 1
@@ -103,6 +105,7 @@ class PPNConfig(object):
 
         if kwargs:
             self.__dict__.update(kwargs)
+            os.environ['CUDA_VISIBLE_DEVICES'] = self.GPU
         else:
             self.create_parsers()
 
@@ -181,7 +184,9 @@ class PPNConfig(object):
         parser.add_argument("-ppn1i", "--ppn1-index", action='store', default=self.PPN1_INDEX, type=int, help="Index of intermediate feature map for PPN1.")
         parser.add_argument("-ppn2i", "--ppn2-index", action='store', default=self.PPN2_INDEX, type=int, help="Index of last feature map for PPN2.")
         parser.add_argument("-p", "--profile", action='store_true', default=self.PROFILE, help="Profile TF model.")
-        parser.add_argument("-pn", "--profile-name", help="Timeline name (profiling).")
+        parser.add_argument("-pn", "--profile-timeline", action='store', default=self.PROFILE_TIMELINE, type=str, help="Timeline name (profiling).")
+        parser.add_argument("-dl", "--detail-log", default=self.DETAIL_LOG, action='store_true', help="Keep all training weights and save at least one every 30min.")
+        parser.add_argument("-sparse", "--sparse", default=self.SPARSE, action='store_true', help="Use sparse UResNet.")
 
     def parse_args(self):
         args = self.parser.parse_args()

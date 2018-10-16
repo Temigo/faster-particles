@@ -59,6 +59,7 @@ class CroppingAlgorithm(object):
                 blob['weight'], _ = crop_util(np.array([patch_center]),
                                               self.cfg.SLICE_SIZE,
                                               original_blob['weight'][..., np.newaxis], return_labels=False)
+                blob['weight'][blob['weight'] == 0.0] = 0.1
                 blob['weight'] = blob['weight'][..., 0]
 
 
@@ -153,10 +154,10 @@ class CroppingAlgorithm(object):
             for i, result in enumerate(batch_results):
                 # Extract voxel and voxel values
                 # Shape N_voxels x dim
-                v, values = extract_voxels(result['predictions'][0, ...])
+                v, values = extract_voxels(result['predictions'])
                 # Extract corresponding softmax scores
                 # Shape N_voxels x num_classes
-                scores = result['softmax'][0, v[:, 0], v[:, 1], v[:, 2], :]
+                scores = result['softmax'][v[:, 0], v[:, 1], v[:, 2], :]
                 # Restore original blob coordinates
                 v = (v + np.flipud(patch_centers[i]) - patch_sizes[i] / 2.0).astype(np.int64)
                 v = np.clip(v, 0, self.cfg.IMAGE_SIZE-1)

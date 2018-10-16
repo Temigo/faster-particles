@@ -15,9 +15,9 @@ class CropTest(tf.test.TestCase):
         np.random.seed(123)
         tf.set_random_seed(123)
         N = 192
-        MAX_STEPS = 10
+        MAX_STEPS = 200
         CROP_SIZE = 64
-        im_proposals_np = (np.random.rand(N, N, N, 1) * 192.).astype(np.float32)
+        im_proposals_np = (np.random.rand(N, N, N, 1) * N).astype(np.float32)
         crop_centers_np = np.random.randint(50, high=100, size=(100, 3))
         # crop_centers_np = np.array([[50, 50, 50]])
         # print(crop_centers_np.shape)

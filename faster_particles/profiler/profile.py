@@ -54,7 +54,8 @@ def main(cfg):
 
     _, data = get_data(cfg)
 
-    net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
+    # net = PPN(cfg=cfg, base_net=basenets[cfg.BASE_NET])
+    net = basenets[cfg.BASE_NET](cfg)
 
     net.init_placeholders()
     net.create_architecture(is_training=True)
@@ -72,7 +73,7 @@ def main(cfg):
     crop_algorithm = cropping_algorithms[cfg.CROP_ALGO](cfg)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        load_weights(cfg, sess)
+        # load_weights(cfg, sess)
         real_step = 0
         for i in range(cfg.MAX_STEPS):
             print("%d/%d" % (i, cfg.MAX_STEPS))
@@ -88,7 +89,9 @@ def main(cfg):
                 real_step += 1
                 feed_dict = {
                     net.image_placeholder: blob['data'],
-                    net.gt_pixels_placeholder: blob['gt_pixels']
+                    net.pixel_labels_placeholder: blob['labels'],
+                    net.learning_rate_placeholder: net.learning_rate,
+                    # net.gt_pixels_placeholder: blob['gt_pixels']
                     }
                 print(j)
                 start = time.time()
@@ -99,8 +102,8 @@ def main(cfg):
                 # _ = sess.run([net._predictions['ppn2_proposals']], feed_dict=feed_dict)
                 # _ = sess.run([net.before_nms], feed_dict=feed_dict)
                 # _ = sess.run([net.after_nms], feed_dict=feed_dict)
-                _ = sess.run([net._predictions['im_proposals']], feed_dict=feed_dict)
-                # _ = sess.run([net.train_op], feed_dict=feed_dict)
+                # _ = sess.run([net._predictions['im_proposals']], feed_dict=feed_dict)
+                _ = sess.run([net.train_op], feed_dict=feed_dict)
                 end = time.time()
                 duration += end - start
 
@@ -112,25 +115,25 @@ def main(cfg):
             f.write(ctf)
             print("Wrote timeline to %s" % cfg.PROFILE_NAME)
 
-        # # Print to stdout an analysis of the memory usage and the timing information
-        # # broken down by python codes.
-        # ProfileOptionBuilder = tf.profiler.ProfileOptionBuilder
-        # opts = ProfileOptionBuilder(ProfileOptionBuilder.time_and_memory()
-        #     ).with_node_names(show_name_regexes=['*']).build()
-        #
-        # tf.profiler.profile(
-        #     tf.get_default_graph(),
-        #     run_meta=run_metadata,
-        #     cmd='code',
-        #     options=opts)
-        #
-        # # Print to stdout an analysis of the memory usage and the timing information
-        # # broken down by operation types.
-        # tf.profiler.profile(
-        #     tf.get_default_graph(),
-        #     run_meta=run_metadata,
-        #     cmd='op',
-        #     options=tf.profiler.ProfileOptionBuilder.time_and_memory())
+        # Print to stdout an analysis of the memory usage and the timing information
+        # broken down by python codes.
+        ProfileOptionBuilder = tf.profiler.ProfileOptionBuilder
+        opts = ProfileOptionBuilder(ProfileOptionBuilder.time_and_memory()
+            ).with_node_names(show_name_regexes=['.*uresnet.*']).build()
+
+        tf.profiler.profile(
+            tf.get_default_graph(),
+            run_meta=run_metadata,
+            cmd='code',
+            options=opts)
+
+        # Print to stdout an analysis of the memory usage and the timing information
+        # broken down by operation types.
+        tf.profiler.profile(
+            tf.get_default_graph(),
+            run_meta=run_metadata,
+            cmd='op',
+            options=tf.profiler.ProfileOptionBuilder.time_and_memory())
 
     duration /= cfg.MAX_STEPS
     print("Average duration of inference = %f ms" % duration)
@@ -173,8 +176,8 @@ if __name__ == '__main__':
         WEIGHTS_FILE_PPN = None
         WEIGHTS_FILE_SMALL = None
         FREEZE = False  # Whether to freeze the weights of base net
-        NET = 'ppn'
-        BASE_NET = 'vgg'
+        NET = 'base'
+        BASE_NET = 'uresnet'
         WEIGHT_LOSS = False
         MIN_SCORE = 0.0
         POSTPROCESSING = 'nms'  # Postprocessing: use either NMS or DBSCAN
@@ -188,10 +191,10 @@ if __name__ == '__main__':
 
         IMAGE_SIZE = 192
         BASE_NET = 'uresnet'
-        NET = 'ppn'
+        NET = 'base'
         ENABLE_CROP = False
         SLICE_SIZE = 64
-        MAX_STEPS = 10
+        MAX_STEPS = 1
         CROP_ALGO = 'proba'
         DISPLAY_DIR = 'display/profile'
         OUTPUT_DIR = 'output/profile'
@@ -213,8 +216,8 @@ if __name__ == '__main__':
         PPN2_INDEX = 5
         PPN1_INDEX = 3
         NUM_STRIDES = 5
-        PROFILE = False
-        PROFILE_NAME = 'timeline_ppn_3_5_memory2.json'
+        PROFILE = True
+        PROFILE_NAME = 'timeline_uresnet_memory.json'
         NEXT_INDEX = 0
         BATCH_SIZE = 1
         R = 20

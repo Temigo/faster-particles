@@ -39,12 +39,12 @@ class Trainer(object):
             os.makedirs(self.outputdir)
 
     def process_blob(self, i, blob, real_step, saver, is_testing,
-                     summary_writer_train, summary_writer_test):
+                     summary_writer_train, summary_writer_test, run_metadata):
         """
         Runs 1 training iteration on blob.
         """
         real_step += 1
-        is_drawing = real_step % 1000 == 0
+        is_drawing = real_step > 0 and real_step % 1000 == 0
 
         if real_step % 100 == 0:
             print("(Real) Step %d" % real_step)
@@ -92,12 +92,19 @@ class Trainer(object):
                                  )
                     self.cfg.IMAGE_SIZE = N
         else:
+            # print(blob['entries'])
+            # print(np.sum(blob['weight']), np.amin(blob['weight']), np.amax(blob['weight']))
+            # print(np.unique(blob['weight'], return_counts=True))
             if is_testing:
                 summary, result = self.test_net.test_image(self.sess, blob)
                 summary_writer_test.add_summary(summary, real_step)
+                if self.cfg.PROFILE:
+                    summary_writer_test.add_run_metadata(run_metadata, "step_%d" % real_step, real_step)
             else:
                 summary, result = self.train_net.train_step(self.sess, blob)
                 summary_writer_train.add_summary(summary, real_step)
+                if self.cfg.PROFILE:
+                    summary_writer_train.add_run_metadata(run_metadata, "step_%d" % real_step, real_step)
 
             if is_drawing and self.display is not None:
                 print('Drawing...')
@@ -147,8 +154,7 @@ class Trainer(object):
             self.cfg.dim2 = self.train_net.dim2
         print("Done.")
 
-
-
+        run_metadata = None
         if self.cfg.PROFILE:
             print('WARNING PROFILING ENABLED')
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -190,7 +196,8 @@ class Trainer(object):
         #     variables_to_restore = [v for v in tf.global_variables() if "ppn" in v.name]
         #     saver = tf.train.Saver(variables_to_restore)
         # else: # Save everything (including base network)
-        saver = tf.train.Saver()
+        saver = tf.train.Saver(max_to_keep=(0 if self.cfg.DETAIL_LOG else 5),
+                               keep_checkpoint_every_n_hours=(0.5 if self.cfg.DETAIL_LOG else 10000.0))
 
         step = 0
         crop_algorithm = cropping_algorithms[self.cfg.CROP_ALGO](self.cfg)
@@ -203,7 +210,7 @@ class Trainer(object):
         for step in range(self.cfg.MAX_STEPS):
             sys.stdout.flush()
             is_testing = step % 10 == 5
-            is_drawing = step % 200 == 0
+            is_drawing = step > 0 and step % 200 == 0
             if is_testing:
                 blob = self.test_toydata.forward()
             else:
@@ -212,6 +219,7 @@ class Trainer(object):
                 print("Iteration %d/%d" % (step, self.cfg.MAX_STEPS))
 
             # Cropping pre-processing
+            # print(blob['entries'])
             patch_centers, patch_sizes = None, None
             if self.cfg.ENABLE_CROP:
                 batch_blobs, patch_centers, patch_sizes = crop_algorithm.process(blob)
@@ -240,7 +248,8 @@ class Trainer(object):
                 real_step, result = self.process_blob(i, miniblob, real_step,
                                                       saver, is_testing,
                                                       summary_writer_train,
-                                                      summary_writer_test)
+                                                      summary_writer_test,
+                                                      run_metadata)
                 # Temporary - check whether there are empty slices
                 x = np.sum(miniblob['data'], axis=(1, 2, 3, 4))
                 if not np.all(x > 0.0):
@@ -283,7 +292,7 @@ class Trainer(object):
             ctf = tl.generate_chrome_trace_format()
             with open(self.cfg.PROFILE_TIMELINE, 'w') as f:
                 f.write(ctf)
-                print("Wrote timeline to timeline.json")
+                print("Wrote timeline to %s" % self.cfg.PROFILE_TIMELINE)
 
             # Print to stdout an analysis of the memory usage and the timing information
             # broken down by python codes.

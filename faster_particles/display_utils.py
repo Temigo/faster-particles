@@ -179,7 +179,8 @@ def display_uresnet(blob, cfg, index=0, predictions=None, scores=None,
         plt.close(fig5)
         print("-- OK.")
 
-    display_predictions(blob, cfg, predictions, directory=directory, name=name, index=index, **kwargs)
+    if predictions is not None:
+        display_predictions(blob, cfg, predictions, directory=directory, name=name, index=index, **kwargs)
 
     # if scores is not None:
     #     fig4 = plt.figure()

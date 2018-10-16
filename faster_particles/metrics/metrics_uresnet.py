@@ -5,6 +5,8 @@ from __future__ import print_function
 import numpy as np
 from faster_particles.metrics.metrics import Metrics
 import os
+import matplotlib
+import matplotlib.pyplot as plt
 
 
 class UResNetMetrics(Metrics):
@@ -23,8 +25,15 @@ class UResNetMetrics(Metrics):
             self.class_acc[class_label] = []
             self.class_score_mean[class_label] = []
             self.class_score_std[class_label] = []
+        if cfg.DETAIL_LOG:
+            self.store_attr = ['acc_all', 'acc_nonzero']
+            self.detail_log = {}
+            for attr in self.store_attr:
+                self.detail_log[attr] = []
+            self.steps = []
 
-    def add(self, blob, results):
+    def add(self, blob_original, results):
+        blob = blob_original.copy()
         blob['labels'] = np.squeeze(blob['labels'])
         results['predictions'] = np.squeeze(results['predictions'])
         results['softmax'] = np.squeeze(results['softmax'])
@@ -72,6 +81,24 @@ class UResNetMetrics(Metrics):
             self.class_acc[class_label].append(class_acc)
             self.class_score_mean[class_label].append(class_score_mean)
             self.class_score_std[class_label].append(class_score_std)
+
+    def snapshot(self, step):
+        self.steps.append(step)
+        for attr in self.store_attr:
+            self.detail_log[attr].append(np.mean(getattr(self, attr)))
+            setattr(self, attr, [])
+
+    def plot_snapshot(self):
+        indices = np.argsort(self.steps)
+        np.savetxt(os.path.join(self.dir, "steps_detail_log.csv"), np.take(self.steps, indices), delimiter=",")
+
+        for attr in self.store_attr:
+            np.savetxt(os.path.join(self.dir, "%s_detail_log.csv"), np.take(self.detail_log[attr], indices), delimiter=",")
+            plt.plot(np.take(self.steps, indices), np.take(self.detail_log[attr], indices))
+            plt.xlabel("Iterations")
+            plt.ylabel("%s" % attr)
+            plt.savefig(os.path.join(self.dir, "%s_detail_log.png" % attr))
+            plt.gcf().clear()
 
     def plot(self):
         # Save data

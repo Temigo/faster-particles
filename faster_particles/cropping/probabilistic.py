@@ -30,7 +30,8 @@ class Probabilistic(CroppingAlgorithm):
         i = 0
         patches = []  # List of center coordinates of patches dxd
         voxel_num_boxes = np.zeros_like(proba)
-        while np.count_nonzero(voxel_num_boxes < self.min_overlap) > 0 and i < self.max_patches:
+        voxel_num_cores = np.zeros_like(proba)
+        while np.count_nonzero(voxel_num_cores < self.min_overlap) > 0 and i < self.max_patches:
             indices = np.random.choice(np.arange(n), p=proba)
             selection_inside = np.all(np.logical_and(
                 coords >= coords[indices] - self.d/2,
@@ -52,6 +53,7 @@ class Probabilistic(CroppingAlgorithm):
 
             # Update voxel_num_boxes: increment all voxels inside box
             voxel_num_boxes[indices_inside] += 1
+            voxel_num_cores[indices_inside[core_indices]] += 1
             patches.append(coords[indices])
             i += 1
             proba = proba * new_proba
