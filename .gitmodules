@@ -1,0 +1,3 @@
+[submodule "sparseio"]
+	path = sparseio
+	url = https://github.com/drinkingkazu/sparseio.git
