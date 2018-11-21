@@ -137,7 +137,7 @@ class LarcvGenerator(object):
                 gt_pixels.append([y, x, 2])
         return gt_pixels
 
-    def forward(self):
+    def forward(self, extract_voxels=True):
         # Boolean: whether to include labels information
         # (only at UResNet training or full PPN+UResNet training)
         include_labels = self.train_uresnet or self.cfg.NET == 'full'
@@ -176,7 +176,8 @@ class LarcvGenerator(object):
             entry_id = entries.data()[index]
 
             final_entries.append(entry_id)
-            voxels, voxels_value = self.extract_voxels(image) if self.cfg.DATA_3D else self.extract_pixels(image)
+            if extract_voxels:
+                voxels, voxels_value = self.extract_voxels(image) if self.cfg.DATA_3D else self.extract_pixels(image)
 
             image = image.reshape(img_shape[1:])
             if include_labels:
@@ -195,13 +196,14 @@ class LarcvGenerator(object):
                     output_labels.append(labels)
                 if self.cfg.URESNET_WEIGHTING:
                     output_weight.append(weight)
-            voxels = np.array(voxels)
-            voxels_value = np.array(voxels_value)
-            if self.cfg.BATCH_SIZE > 1 and self.cfg.SPARSE:
-                output_voxels.append(np.pad(voxels, [(0, 0), (0, 1)], 'constant', constant_values=index))
-            else:
-                output_voxels.append(voxels)
-            output_voxels_value.append(voxels_value)
+            if extract_voxels:
+                voxels = np.array(voxels)
+                voxels_value = np.array(voxels_value)
+                if self.cfg.BATCH_SIZE > 1 and self.cfg.SPARSE:
+                    output_voxels.append(np.pad(voxels, [(0, 0), (0, 1)], 'constant', constant_values=index))
+                else:
+                    output_voxels.append(voxels)
+                output_voxels_value.append(voxels_value)
 
         if len(output) == 0:  # No gt pixels in this batch - try next batch
             print("DUMP - no gt pixels in this batch, try next batch")
@@ -212,9 +214,9 @@ class LarcvGenerator(object):
             output_labels = np.reshape(np.array(output_labels), labels_shape)
         if self.cfg.URESNET_WEIGHTING:
             output_weight = np.reshape(np.array(output_weight), weight_shape)
-
-        output_voxels = np.vstack(output_voxels)
-        output_voxels_value = np.hstack(output_voxels_value)
+        if extract_voxels:
+            output_voxels = np.vstack(output_voxels)
+            output_voxels_value = np.hstack(output_voxels_value)
 
         blob = {}
         blob['data'] = output.astype(np.float32)
@@ -224,8 +226,9 @@ class LarcvGenerator(object):
             blob['weight'] = output_weight.astype(np.float32)
         if include_ppn:
             blob['gt_pixels'] = np.array(gt_pixels)
-        blob['voxels'] = output_voxels  # np.array(voxels)
-        blob['voxels_value'] = output_voxels_value  # np.array(voxels_value)
+        if extract_voxels:
+            blob['voxels'] = output_voxels  # np.array(voxels)
+            blob['voxels_value'] = output_voxels_value  # np.array(voxels_value)
         blob['entries'] = final_entries
         # Crop regions around gt points for small UResNet
         if self.cfg.NET == 'small_uresnet':

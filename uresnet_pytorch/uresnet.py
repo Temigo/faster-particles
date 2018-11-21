@@ -20,7 +20,7 @@ import re
 from uresnet_pytorch.base_uresnet import UResNet
 from uresnet_pytorch.sparse_uresnet import UResNet as UResNetSparse
 #
-# from sparsio.iotools import io_factory
+import sparseio
 
 # Accelerate *if all input sizes are same*
 torch.backends.cudnn.benchmark = True
@@ -33,37 +33,54 @@ torch.backends.cudnn.benchmark = True
 #     return torch.from_numpy(data).cuda(), torch.from_numpy(label).cuda()
 
 
-# def get_data_sparse(cfg):
-#     flags = {
-#         'IO_TYPE': 'larcv',
-#         'INPUT_FILE': cfg.TEST_DATA,
-#         'OUTPUT_FILE': '',
-#         'BATCH_SIZE': cfg.BATCH_SIZE,
-#         'DATA_KEY': 'data',
-#         'LABEL_KEY': '',
-#         'SHUFFLE': True,
-#     }
-#     io = io_factory(flags)
-#     io.initialize()
-#     num_entries = io.num_entries()
-#     i = 0
-#     while i < num_entries:
-#         data, label, idx = io.next()
-#         msg = str(i) + '/' + str(num_entries) + ' ... '  + str(idx) + ' ' + str(data[0].shape)
-#         if label:
-#             msg += str(label[0].shape)
-#         print(msg)
-#         i += len(data)
-#     io.finalize()
+def get_data_sparse(cfg, is_training=False):
+    class FLAGS:
+        pass
+    flags = FLAGS()
+    sparseio.ioflags.add_attributes(flags)
+    flagsargs = {
+        'IO_TYPE': 'larcv',
+        'INPUT_FILE': [cfg.DATA] if is_training else [cfg.TEST_DATA],
+        'OUTPUT_FILE': '',
+        'BATCH_SIZE': cfg.BATCH_SIZE,
+        'DATA_KEY': 'data',
+        'LABEL_KEY': 'segment',
+        'SHUFFLE': True,
+        'NUM_THREADS': 5,
+    }
+    for f in flagsargs:
+        print(f, flagsargs[f])
+        setattr(flags, f, flagsargs[f])
+
+        print(flags.BATCH_SIZE)
+    io = sparseio.iotools.io_factory(flags)
+    io.initialize()
+    io.start_threads()
+    # num_entries = io.num_entries()
+    # i = 0
+    # print(num_entries)
+    # while i < num_entries:
+    #     data, label, idx = io.next()
+    #     print(len(data))
+    #     msg = str(i) + '/' + str(num_entries) + ' ... '  + str(idx) + ' ' + str(data[0].shape)
+    #     msg += str(label[0].shape)
+    #     print(msg)
+    #     print(data[0], label[0])
+    #     i += len(idx)
+    return io
 
 
 def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
     # Data generator
-    train_data, test_data = get_data(cfg)
-    if is_training:
-        data = train_data
+    if cfg.SPARSE:
+        io = get_data_sparse(cfg, is_training=is_training)
     else:
-        data = test_data
+        train_data, test_data = get_data(cfg)
+        if is_training:
+            data = train_data
+        else:
+            data = test_data
+
 
     # Initialize the network the right way
     # net.train and net.eval account for differences in dropout/batch norm
@@ -85,7 +102,8 @@ def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
         print('Done.')
     print('Done.')
 
-    metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': [], 'memory': [],
+    metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': [],
+               'memory_allocated': [], 'memory_cached': [],
                'durations_forward': [], 'durations_backward': [],
                'durations_cuda': [], 'durations': [], 'durations_data': []}
     # Only enable gradients if we are training
@@ -94,30 +112,38 @@ def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
         print("Step %d/%d" % (i, cfg.MAX_STEPS))
         start_step = time.time()
         start = time.time()
-        blob = data.forward()
+        if cfg.SPARSE:
+            voxels, features, labels, idx = io.next()
+        else:
+            blob = data.forward(extract_voxels=False)
+            print(blob['data'].shape)
         end = time.time()
         metrics['durations_data'].append(end-start)
         if cfg.SPARSE:
             start = time.time()
-            coords = torch.from_numpy(blob['voxels']).cuda()
-            features = torch.from_numpy(np.reshape(blob['voxels_value'], (-1, 1))).cuda()
+            coords = torch.from_numpy(voxels).cuda()
+            features = torch.from_numpy(features).cuda()
+            labels = torch.from_numpy(labels).cuda().type(torch.cuda.LongTensor)
             end = time.time()
             metrics['durations_cuda'].append(end-start)
             start = time.time()
             predictions_raw = net(coords, features)  # size N_voxels x num_classes
             end = time.time()
             metrics['durations_forward'].append(end-start)
-            label_voxels, labels = extract_voxels(blob['labels'])
-            labels = torch.from_numpy(labels).cuda().type(torch.cuda.LongTensor)
+
         else:
+            print('Getting data to GPU...')
             start = time.time()
             image = torch.from_numpy(np.moveaxis(blob['data'], -1, 1)).cuda()
             labels = torch.from_numpy(blob['labels']).cuda().type(torch.cuda.LongTensor)
             end = time.time()
+            print('Done.')
             metrics['durations_cuda'].append(end-start)
+            print('Predicting...')
             start = time.time()
             predictions_raw = net(image)
             end = time.time()
+            print('Done.')
             metrics['durations_forward'].append(end-start)
 
         loss = criterion(predictions_raw, labels)
@@ -144,13 +170,14 @@ def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
         metrics['acc_nonzero'].append(acc_nonzero)
         print("\tAccuracy = ", metrics['acc_all'][-1], " - Nonzero accuracy = ", metrics['acc_nonzero'][-1])
 
-        metrics['memory'].append(torch.cuda.memory_allocated())
+        metrics['memory_allocated'].append(torch.cuda.max_memory_allocated())
+        metrics['memory_cached'].append(torch.cuda.max_memory_cached())
 
-        if is_training and i % 100 == 0:
+        if is_training and i % 1000 == 0:
             for attr in metrics:
                 np.savetxt(os.path.join(cfg.OUTPUT_DIR, '%s_%d.csv' % (attr, i)), metrics[attr], delimiter=',')
 
-        if is_training and i % 100 == 0:
+        if is_training and i % 1000 == 0:
             filename = os.path.join(cfg.OUTPUT_DIR, 'model-%d.ckpt' % i)
             # with open(filename, 'wb'):
             torch.save({
@@ -160,7 +187,7 @@ def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
                 'lr_scheduler': lr_scheduler.state_dict()
             }, filename)
 
-        if not is_training:
+        if not is_training and not cfg.SPARSE:
             print('Display...')
             if cfg.SPARSE:
                 final_predictions = np.zeros((1, cfg.IMAGE_SIZE, cfg.IMAGE_SIZE, cfg.IMAGE_SIZE))
@@ -176,39 +203,43 @@ def train_demo(cfg, net, criterion, optimizer, lr_scheduler, is_training):
             print('Done.')
         end_step = time.time()
         metrics['durations'].append(end_step - start_step)
-    print("Average duration = %f s" % metrics['durations'].mean())
+    # print("Average duration = %f s" % metrics['durations'].mean())
+    print(metrics)
+    print(np.array(metrics['memory_allocated']).mean())
+    print(np.array(metrics['memory_cached']).mean())
 
 
 def test(cfg, net):
-    # data = get_data_sparse(cfg)
-    _, data = get_data(cfg)
+    io = get_data_sparse(cfg)
+    num_entries = io.num_entries()
+    # _, data = get_data(cfg)
 
     # Initialize the network the right way
     # net.train and net.eval account for differences in dropout/batch norm
     # during training and testing
     net.eval().cuda()
-    metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': []}
-    metrics_mean = {'acc_all': [], 'acc_nonzero': [], 'loss': []}
-    metrics_std = {'acc_all': [], 'acc_nonzero': [], 'loss': []}
+    metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': [], 'memory': []}
+    metrics_mean = {'acc_all': [], 'acc_nonzero': [], 'loss': [], 'memory': []}
+    metrics_std = {'acc_all': [], 'acc_nonzero': [], 'loss': [], 'memory': []}
     durations_mean = {'cuda': [], 'loss': [], 'forward': [], 'acc': []}
     durations_std = {'cuda': [], 'loss': [], 'forward': [], 'acc': []}
     durations, durations_cuda, durations_loss, durations_acc = [], [], [], []
     steps = []
     print('Listing weights...')
     weights = glob.glob(os.path.join(cfg.WEIGHTS_FILE_BASE, "*.ckpt"))
-    weights.sort()
+    # weights.sort()
     print('Done.')
 
-    blobs = []
-    print('Fetch data...')
-    for i in range(cfg.MAX_STEPS):
-        print("%d/%d" % (i, cfg.MAX_STEPS))
-        blob = data.forward()
-        blob.pop('data')
-        blob['label_voxels'], blob['label_values'] = extract_voxels(blob['labels'])
-        blob.pop('labels')
-        blobs.append(blob)
-    print('Done.')
+    # blobs = []
+    # print('Fetch data...')
+    # for i in range(cfg.MAX_STEPS):
+    #     print("%d/%d" % (i, cfg.MAX_STEPS))
+    #     blob = data.forward()
+    #     blob.pop('data')
+    #     blob['label_voxels'], blob['label_values'] = extract_voxels(blob['labels'])
+    #     blob.pop('labels')
+    #     blobs.append(blob)
+    # print('Done.')
 
     for w in weights:
         step = int(re.findall(r'model-(\d+)', w)[0])
@@ -218,13 +249,16 @@ def test(cfg, net):
             checkpoint = torch.load(f)
             net.load_state_dict(checkpoint['state_dict'])
         print('Done.')
-        for i, blob in enumerate(blobs):  # FIXME
+        i = 0
+        while i < cfg.MAX_STEPS:  # FIXME
             print("Step %d/%d" % (i, cfg.MAX_STEPS))
+            voxels, features, labels, idx = io.next()
+            labels = labels + 1
+            i += 1
             if cfg.SPARSE:
                 start = time.time()
-                coords = torch.from_numpy(blob['voxels']).cuda()
-                features = torch.from_numpy(np.reshape(blob['voxels_value'], (-1, 1))).cuda()
-                label_voxels, labels = blob['label_voxels'], blob['label_values']
+                coords = torch.from_numpy(voxels).cuda()
+                features = torch.from_numpy(features).cuda()
                 labels = torch.from_numpy(labels).cuda().type(torch.cuda.LongTensor)
                 end = time.time()
                 durations_cuda.append(end-start)
@@ -234,7 +268,7 @@ def test(cfg, net):
                 end = time.time()
                 durations.append(end-start)
 
-            else:
+            else:  # DEPRECATED for now
                 start = time.time()
                 image = torch.from_numpy(np.moveaxis(blob['data'], -1, 1)).cuda()
                 labels = torch.from_numpy(blob['labels']).cuda().type(torch.cuda.LongTensor)
@@ -257,18 +291,23 @@ def test(cfg, net):
             start = time.time()
             predicted_labels = torch.argmax(predictions_raw, dim=1)
             acc_all = (predicted_labels == labels).sum().item() / float(labels.numel())
-            nonzero_px = labels > 0
-            nonzero_prediction = predicted_labels[nonzero_px]
-            nonzero_label = labels[nonzero_px]
-            acc_nonzero = (nonzero_prediction == nonzero_label).sum().item() / float(nonzero_label.numel())
+            # nonzero_px = labels > 0
+            # nonzero_prediction = predicted_labels[nonzero_px]
+            # nonzero_label = labels[nonzero_px]
+            # acc_nonzero = (nonzero_prediction == nonzero_label).sum().item() / float(nonzero_label.numel())
+            acc_nonzero = acc_all
             end = time.time()
             durations_acc.append(end - start)
             metrics['acc_all'].append(acc_all)
             metrics['acc_nonzero'].append(acc_nonzero)
             print("\tAccuracy = ", metrics['acc_all'][-1], " - Nonzero accuracy = ", metrics['acc_nonzero'][-1])
 
+            metrics['memory'].append(torch.cuda.memory_allocated())
+
         metrics_mean['loss'].append(np.array(metrics['loss']).mean())
         metrics_std['loss'].append(np.array(metrics['loss']).std())
+        metrics_mean['memory'].append(np.array(metrics['memory']).mean())
+        metrics_std['memory'].append(np.array(metrics['memory']).std())
         metrics_mean['acc_all'].append(np.array(metrics['acc_all']).mean())
         metrics_std['acc_all'].append(np.array(metrics['acc_all']).std())
         metrics_mean['acc_nonzero'].append(np.array(metrics['acc_nonzero']).mean())
@@ -282,7 +321,7 @@ def test(cfg, net):
         durations_mean['acc'].append(np.array(durations_acc).mean())
         durations_std['acc'].append(np.array(durations_acc).std())
         durations, durations_cuda, durations_loss, durations_acc = [], [], [], []
-        metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': []}
+        metrics = {'acc_all': [], 'acc_nonzero': [], 'loss': [], 'memory': []}
 
         print('Mean cuda duration = %f s' % durations_mean['cuda'][-1])
         print('Mean loss duration = %f s' % durations_mean['loss'][-1])
@@ -290,6 +329,7 @@ def test(cfg, net):
         print('Mean forward duration = %f s' % durations_mean['forward'][-1])
 
         print('Mean acc = %f s' % metrics_mean['acc_nonzero'][-1])
+        print('Mean memory usage = %f' % metrics_mean['memory'][-1])
 
         np.savetxt(os.path.join(cfg.OUTPUT_DIR, 'steps_%d.csv' % step), steps, delimiter=',')
         for attr in metrics:
@@ -303,21 +343,21 @@ def test(cfg, net):
 if __name__ == '__main__':
     # Retrieve dataset with LarcvGenerator
     cfgargs = {
-        'DISPLAY_DIR': 'display/sparse11',
-        'OUTPUT_DIR': '/data/sparse11',
-        'LOG_DIR': 'log/sparse11',  # useless
+        'DISPLAY_DIR': '/data/nunet/display_dense_uresnet_3d0',
+        'OUTPUT_DIR': '/data/nunet/weights_dense_uresnet_3d0',
+        'LOG_DIR': '/data/nunet/log_dense_uresnet_3d0',  # useless
         'BASE_NET': 'uresnet',
         'NET': 'base',
         'MAX_STEPS': 10,
         'DATA_3D': True,
-        'SPARSE': True,
+        'SPARSE': False,
         'DATA': "/data/dlprod_ppn_v08_p02_filtered/train_p02.root",
         'TEST_DATA': "/data/dlprod_ppn_v08_p02_filtered/test_p02.root",
-        # 'WEIGHTS_FILE_BASE': '/data/sparse10',
+        # 'WEIGHTS_FILE_BASE': '/data/sparse11',
         'IMAGE_SIZE': 192,
-        'BATCH_SIZE': 32,
-        'GPU': '1',
-        'NUM_STRIDES': 5,
+        'BATCH_SIZE': 2,
+        'GPU': '2,3',
+        'NUM_STRIDES': 3,
         'BASE_NUM_OUTPUTS': 16,
     }
     cfg = PPNConfig(**cfgargs)
@@ -331,21 +371,27 @@ if __name__ == '__main__':
         os.makedirs(cfg.DISPLAY_DIR)
 
     is_training = True
+    # gpus = map(int, cfg.GPU.split(','))
+    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.GPU
+    gpus = list(range(len(cfg.GPU.split(','))))
 
     # Instantiate and move to GPU the network
     print('Building network...')
+    torch.cuda.set_device(gpus[0])
     if cfg.SPARSE:
-        net = UResNetSparse(True,
+        net = UResNetSparse(cfg.DATA_3D,
                       num_strides=cfg.NUM_STRIDES,
                       base_num_outputs=cfg.BASE_NUM_OUTPUTS)
     else:
-        net = UResNet(True,
+        net = UResNet(cfg.DATA_3D,
                       num_strides=cfg.NUM_STRIDES,
                       base_num_outputs=cfg.BASE_NUM_OUTPUTS)
-    # print(net)
+
+    net = torch.nn.DataParallel(net, device_ids=gpus)
+    print(net)
 
     # Define loss and optimizer
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.Adam(net.parameters(), lr=0.001)
     logsoftmax = nn.LogSoftmax(dim=1)
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 1000, gamma=0.1)
